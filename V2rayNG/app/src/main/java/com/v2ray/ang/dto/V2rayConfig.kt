@@ -99,11 +99,43 @@ data class V2rayConfig(
             var reserved: List<Int>? = null,
             var mtu: Int? = null,
             var domainStrategy: String? = null,
+            var amnezia: AmneziaWGOptionsBean? = null,
         ) {
+
+            data class AmneziaWGOptionsBean(
+                var jc: Int = 0,
+                var jmin: Int = 0,
+                var jmax: Int = 0,
+                var s1: Int = 0,
+                var s2: Int = 0,
+                var s3: Int = 0,
+                var s4: Int = 0,
+                var h1: String? = null,
+                var h2: String? = null,
+                var h3: String? = null,
+                var h4: String? = null,
+                var i1: String? = null,
+                var i2: String? = null,
+                var i3: String? = null,
+                var i4: String? = null,
+                var i5: String? = null,
+                var headerProtectionKey: String? = null,
+                var contentPaddingAddition: String? = null,
+                var rekeyAfterTime: String? = null,
+                var rekeyTimeout: String? = null,
+                var rejectAfterTime: String? = null,
+                var keepaliveTimeout: String? = null,
+                var maxHandshakeAttempts: String? = null,
+                var randomizePacketTrailers: Boolean = false,
+                var disableCookieReplies: Boolean = false,
+            )
+
             data class WireGuardBean(
                 var publicKey: String = "",
                 var preSharedKey: String? = null,
-                var endpoint: String = ""
+                var endpoint: String = "",
+                var keepAlive: Int? = null,
+                var allowedIPs: List<String>? = null,
             )
         }
 

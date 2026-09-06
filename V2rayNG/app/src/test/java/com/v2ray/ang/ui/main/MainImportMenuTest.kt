@@ -6,6 +6,39 @@ import org.junit.Test
 class MainImportMenuTest {
 
     @Test
+    fun mainMoreMenuKeepsRealPingAndRemovesTcpOnlyTest() {
+        assertEquals(
+            listOf(
+                MainMoreMenuAction.RestartService,
+                MainMoreMenuAction.DeleteAll,
+                MainMoreMenuAction.DeleteDuplicate,
+                MainMoreMenuAction.DeleteInvalid,
+                MainMoreMenuAction.ExportAll,
+                MainMoreMenuAction.LocateSelected,
+                MainMoreMenuAction.SortByTestResults,
+                MainMoreMenuAction.TestAllRealPing,
+                MainMoreMenuAction.UpdateSubscriptions,
+            ),
+            MainMoreMenuAction.entries,
+        )
+    }
+
+    @Test
+    fun drawerContainsOnlyCoreSettingsAndBackup() {
+        assertEquals(
+            listOf(
+                MainDestination.Subscriptions,
+                MainDestination.PerAppProxy,
+                MainDestination.Routing,
+                MainDestination.UserAssets,
+                MainDestination.Settings,
+                MainDestination.BackupRestore,
+            ),
+            drawerItems,
+        )
+    }
+
+    @Test
     fun regularShareMenuContainsOnlyShareActions() {
         val expected = listOf(
             ServerMenuAction.ShareQRCode,

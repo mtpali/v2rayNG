@@ -46,6 +46,7 @@ object AngConfigManager {
             EConfigType.TROJAN.protocolScheme to TrojanFmt::parse,
             EConfigType.VLESS.protocolScheme to VlessFmt::parse,
             EConfigType.WIREGUARD.protocolScheme to WireguardFmt::parse,
+            AppConfig.AMNEZIAWG to WireguardFmt::parseAmneziaWG,
             EConfigType.HYSTERIA2.protocolScheme to Hysteria2Fmt::parse,
             AppConfig.HY2 to Hysteria2Fmt::parse,
         )
@@ -155,13 +156,16 @@ object AngConfigManager {
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ""
 
+            if (config.configType == EConfigType.WIREGUARD) {
+                return WireguardFmt.exportUri(config)
+            }
             return config.configType.protocolScheme + when (config.configType) {
                 EConfigType.VMESS -> VmessFmt.toUri(config)
                 EConfigType.SHADOWSOCKS -> ShadowsocksFmt.toUri(config)
                 EConfigType.SOCKS -> SocksFmt.toUri(config)
                 EConfigType.VLESS -> VlessFmt.toUri(config)
                 EConfigType.TROJAN -> TrojanFmt.toUri(config)
-                EConfigType.WIREGUARD -> WireguardFmt.toUri(config)
+                EConfigType.WIREGUARD -> error("WireGuard export is handled above")
                 EConfigType.HYSTERIA2 -> Hysteria2Fmt.toUri(config)
                 else -> {}
             }

@@ -122,7 +122,6 @@ class CoreTestService : Service() {
             worker = RealPingWorkerService(
                 context = this,
                 guids = guidsList,
-                onlyTcp = message.onlyTcp,
                 onEvent = { event -> handleWorkerEvent(event, message) { activeWorkers.remove(worker) } }
             )
             activeWorkers.add(worker)

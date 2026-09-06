@@ -192,7 +192,6 @@ class MainViewModel(
         when (action) {
             MainAction.Initialize -> initialize()
             MainAction.RefreshGroups -> setupGroupTab(forceRefresh = true)
-            MainAction.TestAllServers -> testAllRealPing(true)
             MainAction.TestRealAllServers -> testAllRealPing()
             MainAction.CancelTesting -> cancelAllPing()
             MainAction.RemoveAllServers -> removeAllServerAsync()
@@ -449,10 +448,12 @@ class MainViewModel(
     }
 
     private fun importConfigViaSub() {
+        if (uiState.value.isRefreshingSubscriptions) return
         val subId = uiState.value.selectedGroupId
+        _uiState.update { it.copy(isRefreshingSubscriptions = true) }
         launchLoading {
-            withContext(ioDispatcher) {
-                try {
+            try {
+                withContext(ioDispatcher) {
                     val result = if (subId.isEmpty()) {
                         dataSource.updateConfigViaSubAll()
                     } else {
@@ -473,12 +474,14 @@ class MainViewModel(
                         setupGroupTab(forceRefresh = true)
                         refreshSelectedGuid()
                     }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "Subscription update failed", e)
-                    toastError(R.string.toast_failure)
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "Subscription update failed", e)
+                toastError(R.string.toast_failure)
+            } finally {
+                _uiState.update { it.copy(isRefreshingSubscriptions = false) }
             }
         }
     }
@@ -728,7 +731,7 @@ class MainViewModel(
         }
     }
 
-    fun testAllRealPing(onlyTcp: Boolean = false) {
+    fun testAllRealPing() {
         dataSource.cancelAllPing()
         val groupId = uiState.value.selectedGroupId
         val servers = currentServers()
@@ -764,7 +767,6 @@ class MainViewModel(
                     key = AppConfig.MSG_MEASURE_CONFIG_START,
                     subscriptionId = groupId,
                     serverGuids = if (keywordFilter.isNotEmpty()) serverGuids else emptyList(),
-                    onlyTcp = onlyTcp
                 )
             )
         }
