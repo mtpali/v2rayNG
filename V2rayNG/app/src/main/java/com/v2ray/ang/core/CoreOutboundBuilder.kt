@@ -238,23 +238,15 @@ object CoreOutboundBuilder {
     private fun toOutboundWireguard(profileItem: ProfileItem): OutboundBean? {
         val outboundBean = createInitOutbound(EConfigType.WIREGUARD)
 
-        val rawAddresses = profileItem.localAddress
-            ?.split(',', '\n')
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.ifEmpty { null }
-            ?: listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4)
-
-        val addresses = if (MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true) {
-            rawAddresses
-        } else {
-            val ipv4Addresses = rawAddresses.filter { !it.contains(":") }
-            ipv4Addresses.ifEmpty { listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4) }
-        }
+        val addresses = WireguardAddressPolicy.activeAddresses(
+            profileItem.localAddress,
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true,
+        )
 
         outboundBean?.settings?.let { wireguard ->
             wireguard.secretKey = profileItem.secretKey
             wireguard.address = addresses
+            wireguard.domainStrategy = WireguardAddressPolicy.domainStrategy(addresses)
             wireguard.peers?.firstOrNull()?.let { peer ->
                 peer.publicKey = profileItem.publicKey.orEmpty()
                 peer.preSharedKey = profileItem.preSharedKey?.nullIfBlank()
@@ -267,7 +259,7 @@ object CoreOutboundBuilder {
                     ?.ifEmpty { null }
             }
             wireguard.mtu = profileItem.mtu
-            wireguard.reserved = profileItem.reserved?.takeIf { it.isNotBlank() }?.split(",")?.filter { it.isNotBlank() }?.map { it.trim().toInt() }
+            wireguard.reserved = WireguardReservedPolicy.outboundBytes(profileItem.reserved)
             if (profileItem.isAmneziaWG) {
                 wireguard.amnezia = OutboundBean.OutSettingsBean.AmneziaWGOptionsBean(
                     jc = profileItem.awgJc,

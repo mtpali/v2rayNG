@@ -21,6 +21,7 @@ import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.PackageUidResolver
 import com.v2ray.ang.util.Utils
+import java.io.File
 
 object CoreConfigManager {
     private var initConfigCache: String? = null
@@ -97,6 +98,7 @@ object CoreConfigManager {
         val result = ConfigResult(true, configContext.guid, raw)
 
         val json = JsonUtil.parseString(raw)?.takeIf { it.isJsonObject }?.asJsonObject ?: return result
+        GeoIpRuleResolver.normalizeCustomRouting(json, compactGeoIpAvailable(context))
 
         // Inject or remove traffic statistics configuration based on user preference
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) == true) {
@@ -1181,17 +1183,8 @@ object CoreConfigManager {
 
         val rule = JsonUtil.fromJson(JsonUtil.toJson(item), V2rayConfig.RoutingBean.RulesBean::class.java) ?: return
 
-        // Replace specific geoip rules with ext versions
         rule.ip?.let { ipList ->
-            val updatedIpList = ArrayList<String>()
-            ipList.forEach { ip ->
-                when (ip) {
-                    AppConfig.GEOIP_CN -> updatedIpList.add("ext:${AppConfig.GEOIP_ONLY_CN_PRIVATE_DAT}:cn")
-                    AppConfig.GEOIP_PRIVATE -> updatedIpList.add("ext:${AppConfig.GEOIP_ONLY_CN_PRIVATE_DAT}:private")
-                    else -> updatedIpList.add(ip)
-                }
-            }
-            rule.ip = updatedIpList
+            rule.ip = GeoIpRuleResolver.resolve(ipList, compactGeoIpAvailable(context))
         }
 
         if (SettingsManager.canUseProcessRouting()) {
@@ -1226,6 +1219,9 @@ object CoreConfigManager {
 
         v2rayConfig.routing.rules.add(rule)
     }
+
+    private fun compactGeoIpAvailable(context: Context): Boolean =
+        File(Utils.userAssetPath(context), AppConfig.GEOIP_ONLY_CN_PRIVATE_DAT).isFile
 
 
     /**

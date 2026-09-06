@@ -373,13 +373,14 @@ object AngConfigManager {
                 LogUtil.e(AppConfig.TAG, "Failed to parse custom config server as single config", e)
             }
             return 0
-        } else if (server.startsWith("[Interface]") && server.contains("[Peer]")) {
+        } else if (WireguardFmt.isWireguardConf(server)) {
             try {
-                val config = WireguardFmt.parseWireguardConfFile(server)
+                val normalizedServer = WireguardFmt.normalizeConfText(server)
+                val config = WireguardFmt.parseWireguardConfFile(normalizedServer)
                 config.subscriptionId = subid
                 config.description = generateDescription(config)
                 commitProfiles(
-                    configs = listOf(ParsedProfile(config, server)),
+                    configs = listOf(ParsedProfile(config, normalizedServer)),
                     subid = subid,
                     append = append,
                 )
