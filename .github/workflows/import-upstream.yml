@@ -31,7 +31,7 @@ jobs:
           git merge --allow-unrelated-histories --strategy=ours --no-commit 2020807c255b76b09c9ced4255c95600250aef48
           git rm -r .
           git checkout 2020807c255b76b09c9ced4255c95600250aef48 -- .
-          git rm -r .github/workflows
+          git rm -rf -- .github/workflows
           mkdir -p .github/workflows
           cp /tmp/import-upstream.yml .github/workflows/import-upstream.yml
           git add .github/workflows/import-upstream.yml
