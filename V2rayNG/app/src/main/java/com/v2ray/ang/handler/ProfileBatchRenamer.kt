@@ -10,8 +10,10 @@ internal object ProfileBatchRenamer {
         val normalizedPrefix = prefix.trim()
         if (normalizedPrefix.isEmpty()) return linkedMapOf()
 
-        return profiles.mapIndexedTo(linkedMapOf()) { index, (guid, profile) ->
-            guid to profile.copy(remarks = "$normalizedPrefix ${index + 1}")
+        val result = linkedMapOf<String, ProfileItem>()
+        profiles.forEachIndexed { index, (guid, profile) ->
+            result[guid] = profile.copy(remarks = "$normalizedPrefix ${index + 1}")
         }
+        return result
     }
 }
