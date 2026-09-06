@@ -1,0 +1,34 @@
+name: Import upstream source
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    if: github.event.head_commit.message == 'chore: add upstream import workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Import exact upstream v2rayNG source and history
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/2dust/v2rayNG.git
+          git fetch upstream master
+          git cat-file -e 2020807c255b76b09c9ced4255c95600250aef48^{commit}
+          git merge --allow-unrelated-histories --strategy=ours --no-commit             2020807c255b76b09c9ced4255c95600250aef48
+          git rm -r .
+          git checkout 2020807c255b76b09c9ced4255c95600250aef48 -- .
+          git commit -m "chore: import upstream v2rayNG 2.3.7"
+          git push origin HEAD:main
