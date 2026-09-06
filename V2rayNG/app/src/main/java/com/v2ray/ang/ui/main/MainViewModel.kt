@@ -106,8 +106,9 @@ class MainViewModel(
                 updateRunningState(true)
             }
 
-            MainServiceEvent.StateStartFailure -> {
-                toastError(R.string.toast_services_failure)
+            is MainServiceEvent.StateStartFailure -> {
+                if (event.message.isBlank()) toastError(R.string.toast_services_failure)
+                else toastError(event.message)
                 updateRunningState(false)
             }
 
@@ -205,6 +206,7 @@ class MainViewModel(
             is MainAction.RemoveServer -> removeServerAndRefresh(action.guid)
             is MainAction.Search -> filterConfig(action.query)
             is MainAction.ImportBatchConfig -> importBatchConfig(action.configText)
+            is MainAction.RenameSubscriptionProfiles -> renameSubscriptionProfiles(action.groupId, action.prefix)
             MainAction.LocateHandled -> consumeLocateTarget()
             is MainAction.ShareQRCode -> {
                 val bitmap = dataSource.share2QRCode(action.guid)
@@ -482,6 +484,34 @@ class MainViewModel(
                 toastError(R.string.toast_failure)
             } finally {
                 _uiState.update { it.copy(isRefreshingSubscriptions = false) }
+            }
+        }
+    }
+
+    private fun renameSubscriptionProfiles(groupId: String, prefix: String) {
+        if (groupId.isBlank()) {
+            toastError(R.string.toast_select_subscription_group)
+            return
+        }
+        val normalizedPrefix = prefix.trim()
+        if (normalizedPrefix.isEmpty()) {
+            toastError(R.string.toast_profile_name_prefix_required)
+            return
+        }
+
+        launchLoading {
+            withContext(ioDispatcher) {
+                try {
+                    val count = dataSource.renameProfilesInGroup(groupId, normalizedPrefix)
+                    cacheMutex.withLock { groupDataCache.remove(groupId) }
+                    updateGroupUi(groupId, loadGroup(groupId, forceRefresh = true))
+                    toast(dataSource.getString(R.string.toast_profiles_renamed, count))
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    LogUtil.e(AppConfig.TAG, "Failed to rename subscription profiles", error)
+                    toastError(R.string.toast_failure)
+                }
             }
         }
     }

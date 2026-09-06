@@ -33,6 +33,7 @@ interface MainDataSource : Closeable {
     fun decodeAffiliationInfo(guid: String): ServerAffiliationInfo?
 
     fun encodeServerList(guids: List<String>, groupId: String)
+    fun renameProfilesInGroup(groupId: String, prefix: String): Int
 
     fun removeServer(guid: String)
     fun removeAllServer(): Int

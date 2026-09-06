@@ -90,7 +90,8 @@ class CoreTestService : Service() {
             NotificationChannelType.CORE_TEST,
             getString(R.string.app_name),
             getString(R.string.title_real_ping_all_server),
-            cancelAction
+            cancelAction,
+            silent = true,
         )
         val message = intent?.serializable<TestServiceMessage>("content")
         if (message == null) {
@@ -155,9 +156,19 @@ class CoreTestService : Service() {
                         AngConfigManager.removeInvalidServer(message.subscriptionId)
                     }
 
-                    if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, false)) {
-                        AngConfigManager.sortByTestResultsForSub(message.subscriptionId)
+                }
+
+                if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, false)) {
+                    val testedGroupIds = when {
+                        message.subscriptionId.isNotEmpty() -> listOf(message.subscriptionId)
+                        message.serverGuids.isNotEmpty() -> message.serverGuids
+                            .mapNotNull(MmkvManager::decodeServerConfig)
+                            .map { it.subscriptionId }
+                            .filter { it.isNotEmpty() }
+                            .distinct()
+                        else -> MmkvManager.decodeSubsList()
                     }
+                    testedGroupIds.forEach(AngConfigManager::sortByTestResultsForSub)
                 }
 
                 MessageHelper.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_FINISH, event.status)

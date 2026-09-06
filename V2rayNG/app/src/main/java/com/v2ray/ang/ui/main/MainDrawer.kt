@@ -32,6 +32,13 @@ enum class MainDestination(@DrawableRes val iconRes: Int, @StringRes val labelRe
     BackupRestore(R.drawable.ic_restore_24dp, R.string.title_configuration_backup_restore)
 }
 
+enum class MainDrawerAction(@DrawableRes val iconRes: Int, @StringRes val labelRes: Int) {
+    RenameSubscriptionProfiles(
+        R.drawable.ic_edit_24dp,
+        R.string.title_rename_subscription_profiles,
+    )
+}
+
 private val primaryDrawerItems = listOf(
     MainDestination.Subscriptions,
     MainDestination.PerAppProxy,
@@ -41,9 +48,14 @@ private val primaryDrawerItems = listOf(
 )
 
 internal val drawerItems = primaryDrawerItems + MainDestination.BackupRestore
+internal val drawerActions = MainDrawerAction.entries
 
 @Composable
-fun MainDrawerContent(drawerState: DrawerState, onNavigate: (MainDestination) -> Unit) {
+fun MainDrawerContent(
+    drawerState: DrawerState,
+    onNavigate: (MainDestination) -> Unit,
+    onAction: (MainDrawerAction) -> Unit,
+) {
     val drawerScrollState = rememberScrollState()
 
     ModalDrawerSheet(
@@ -56,8 +68,7 @@ fun MainDrawerContent(drawerState: DrawerState, onNavigate: (MainDestination) ->
                 .verticalScroll(drawerScrollState)
                 .verticalScrollbar(drawerScrollState)
         ) {
-            drawerItems.forEachIndexed { index, item ->
-                if (index == primaryDrawerItems.size) AppDivider()
+            primaryDrawerItems.forEach { item ->
                 NavigationDrawerItem(
                     label = { Text(stringResource(item.labelRes)) },
                     selected = false,
@@ -66,6 +77,28 @@ fun MainDrawerContent(drawerState: DrawerState, onNavigate: (MainDestination) ->
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
             }
+            drawerActions.forEach { item ->
+                NavigationDrawerItem(
+                    label = { Text(stringResource(item.labelRes)) },
+                    selected = false,
+                    onClick = { onAction(item) },
+                    icon = { Icon(painterResource(item.iconRes), contentDescription = null) },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+            }
+            AppDivider()
+            NavigationDrawerItem(
+                label = { Text(stringResource(MainDestination.BackupRestore.labelRes)) },
+                selected = false,
+                onClick = { onNavigate(MainDestination.BackupRestore) },
+                icon = {
+                    Icon(
+                        painterResource(MainDestination.BackupRestore.iconRes),
+                        contentDescription = null,
+                    )
+                },
+                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+            )
         }
     }
 }

@@ -155,6 +155,7 @@ fun SettingsScreen(
     var proxySharing by rememberMmkvBool(AppConfig.PREF_PROXY_SHARING, false)
 
     var speedEnabled by rememberMmkvBool(AppConfig.PREF_SPEED_ENABLED, false)
+    var autoSortAfterTest by rememberMmkvBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, false)
     var confirmRemove by rememberMmkvBool(AppConfig.PREF_CONFIRM_REMOVE, false)
     var doubleColumnDisplay by rememberMmkvBool(AppConfig.PREF_DOUBLE_COLUMN_DISPLAY, false)
     var groupAllDisplay by rememberMmkvBool(AppConfig.PREF_GROUP_ALL_DISPLAY, false)
@@ -246,6 +247,12 @@ fun SettingsScreen(
                     summary = stringResource(R.string.summary_pref_speed_enabled),
                     checked = speedEnabled,
                     onCheckedChange = { speedEnabled = it }
+                )
+                SettingsSwitchItem(
+                    title = stringResource(R.string.title_pref_auto_sort_after_test),
+                    summary = stringResource(R.string.summary_pref_auto_sort_after_test),
+                    checked = autoSortAfterTest,
+                    onCheckedChange = { autoSortAfterTest = it }
                 )
                 SettingsSwitchItem(
                     title = stringResource(R.string.title_pref_confirm_remove),

@@ -84,10 +84,11 @@ object NotificationHelper {
         channelType: NotificationChannelType,
         title: String,
         content: String,
-        action: NotificationCompat.Action? = null
+        action: NotificationCompat.Action? = null,
+        silent: Boolean = false,
     ) {
         ensureChannelCreated(channelType, service)
-        val builder = buildNotificationBuilder(channelType, service, title, content, action)
+        val builder = buildNotificationBuilder(channelType, service, title, content, action, silent)
         builderCache[channelType.notificationId] = builder
         service.startForeground(channelType.notificationId, builder.build())
     }
@@ -133,7 +134,11 @@ object NotificationHelper {
         val channel = NotificationChannel(
             channelType.channelId,
             channelType.channelName,
-            NotificationManager.IMPORTANCE_LOW
+            if (channelType == NotificationChannelType.CORE_TEST) {
+                NotificationManager.IMPORTANCE_MIN
+            } else {
+                NotificationManager.IMPORTANCE_LOW
+            }
         ).apply {
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
@@ -145,7 +150,8 @@ object NotificationHelper {
         context: Context,
         title: String,
         content: String,
-        action: NotificationCompat.Action? = null
+        action: NotificationCompat.Action? = null,
+        silent: Boolean = false,
     ): NotificationCompat.Builder {
         val channelId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             channelType.channelId
@@ -160,7 +166,9 @@ object NotificationHelper {
             .setContentText(content)
             .setOngoing(false)
             .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(if (silent) NotificationCompat.PRIORITY_MIN else NotificationCompat.PRIORITY_LOW)
+            .setSilent(silent)
+            .setShowWhen(!silent)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .apply { action?.let(::addAction) }
     }

@@ -29,7 +29,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.ui.compose.LocalDarkTheme
+import com.v2ray.ang.ui.compose.InputDialog
+import com.v2ray.ang.ui.compose.InputField
 import com.v2ray.ang.ui.compose.QRCodeDialog
+import androidx.compose.ui.res.stringResource
+import com.v2ray.ang.R
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -59,6 +63,8 @@ fun MainScreen(
     var showDelDuplicateConfirm by remember { mutableStateOf(false) }
     var showDelInvalidConfirm by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf<String?>(null) }
+    var showRenameGroupDialog by remember { mutableStateOf(false) }
+    var renameGroupPrefix by remember { mutableStateOf("") }
 
     var shareTarget by remember { mutableStateOf<Triple<String, ProfileItem, Boolean>?>(null) }
     val removeServer: (String) -> Unit = { guid ->
@@ -130,6 +136,34 @@ fun MainScreen(
     if (shareQRCodeBitmap != null) {
         QRCodeDialog(bitmap = shareQRCodeBitmap, onDismiss = { onAction(MainAction.DismissQRCodeDialog) })
     }
+    if (showRenameGroupDialog) {
+        InputDialog(
+            title = stringResource(R.string.title_rename_subscription_profiles),
+            fields = listOf(
+                InputField(
+                    label = stringResource(R.string.hint_profile_name_prefix),
+                    value = renameGroupPrefix,
+                )
+            ),
+            onFieldChange = { _, value -> renameGroupPrefix = value },
+            confirmText = stringResource(R.string.action_ok),
+            dismissText = stringResource(R.string.action_cancel),
+            onConfirm = {
+                onAction(
+                    MainAction.RenameSubscriptionProfiles(
+                        uiState.selectedGroupId,
+                        renameGroupPrefix,
+                    )
+                )
+                showRenameGroupDialog = false
+                renameGroupPrefix = ""
+            },
+            onDismiss = {
+                showRenameGroupDialog = false
+                renameGroupPrefix = ""
+            },
+        )
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -139,7 +173,13 @@ fun MainScreen(
                 onNavigate = { route ->
                     scope.launch { drawerState.close() }
                     onNavigate(route)
-                }
+                },
+                onAction = { action ->
+                    scope.launch { drawerState.close() }
+                    when (action) {
+                        MainDrawerAction.RenameSubscriptionProfiles -> showRenameGroupDialog = true
+                    }
+                },
             )
         }
     ) {
@@ -164,12 +204,10 @@ fun MainScreen(
                     onAction = onAction,
                     onMoreMenuAction = { action ->
                         when (action) {
-                            MainMoreMenuAction.RestartService -> onAction(MainAction.RestartService)
                             MainMoreMenuAction.DeleteAll -> showDelAllConfirm = true
                             MainMoreMenuAction.DeleteDuplicate -> showDelDuplicateConfirm = true
                             MainMoreMenuAction.DeleteInvalid -> showDelInvalidConfirm = true
                             MainMoreMenuAction.ExportAll -> onAction(MainAction.ExportAll)
-                            MainMoreMenuAction.LocateSelected -> onAction(MainAction.LocateSelectedServer)
                             MainMoreMenuAction.SortByTestResults -> onAction(MainAction.SortByTestResults)
                             MainMoreMenuAction.TestAllRealPing -> onAction(MainAction.TestRealAllServers)
                             MainMoreMenuAction.UpdateSubscriptions -> onAction(MainAction.UpdateSubscriptions)

@@ -53,6 +53,7 @@ sealed interface MainAction {
     data class ImportManually(val type: Int) : MainAction
     data object RestartService : MainAction
     data object LocateSelectedServer : MainAction
+    data class RenameSubscriptionProfiles(val groupId: String, val prefix: String) : MainAction
 
     data class SelectGroup(val groupId: String) : MainAction
     data class SelectServer(val guid: String) : MainAction

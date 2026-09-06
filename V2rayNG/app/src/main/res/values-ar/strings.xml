@@ -339,6 +339,11 @@
     <string name="title_update_subscription_no_subscription">لا توجد اشتراكات</string>
     <string name="toast_server_not_found_in_group">لم يُعثر على الخادم المحدد في المجموعة الحالية</string>
     <string name="title_locate_selected_config">العثور على التكوين المحدد</string>
+    <string name="title_rename_subscription_profiles">إعادة تسمية ملفات الاشتراك</string>
+    <string name="hint_profile_name_prefix">بادئة اسم الملف</string>
+    <string name="toast_select_subscription_group">اختر مجموعة اشتراك أولاً</string>
+    <string name="toast_profile_name_prefix_required">أدخل بادئة اسم الملف</string>
+    <string name="toast_profiles_renamed">تمت إعادة تسمية %1$d من الملفات</string>
 
     <string name="tasker_start_service">بدء الخدمة</string>
     <string name="tasker_setting_confirm">تأكيد</string>

@@ -339,6 +339,11 @@
     <string name="title_update_subscription_no_subscription">No subscriptions</string>
     <string name="toast_server_not_found_in_group">Selected server not found in current group</string>
     <string name="title_locate_selected_config">Find selected configuration</string>
+    <string name="title_rename_subscription_profiles">Rename subscription profiles</string>
+    <string name="hint_profile_name_prefix">Profile name prefix</string>
+    <string name="toast_select_subscription_group">Select a subscription group first</string>
+    <string name="toast_profile_name_prefix_required">Enter a profile name prefix</string>
+    <string name="toast_profiles_renamed">Renamed %1$d profiles</string>
 
     <string name="tasker_start_service">Start Service</string>
     <string name="tasker_setting_confirm">Confirm</string>

@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
@@ -129,7 +132,10 @@ fun InputDialog(
         title = { Text(title) },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 fields.forEachIndexed { index, field ->
@@ -137,8 +143,8 @@ fun InputDialog(
                         value = field.value,
                         onValueChange = { onFieldChange(index, it) },
                         label = { Text(field.label) },
-                        singleLine = false,
-                        maxLines = 5,
+                        singleLine = field.singleLine,
+                        maxLines = if (field.singleLine) 1 else 5,
                         visualTransformation = field.visualTransformation,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,

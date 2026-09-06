@@ -54,7 +54,9 @@ class MainRepository(
                 AppConfig.MSG_STATE_RUNNING -> MainServiceEvent.StateRunning
                 AppConfig.MSG_STATE_NOT_RUNNING -> MainServiceEvent.StateNotRunning
                 AppConfig.MSG_STATE_START_SUCCESS -> MainServiceEvent.StateStartSuccess
-                AppConfig.MSG_STATE_START_FAILURE -> MainServiceEvent.StateStartFailure
+                AppConfig.MSG_STATE_START_FAILURE -> MainServiceEvent.StateStartFailure(
+                    safeIntent.getStringExtra("content").orEmpty()
+                )
 
                 AppConfig.MSG_STATE_STOP_SUCCESS -> MainServiceEvent.StateStopSuccess
                 AppConfig.MSG_MEASURE_DELAY_RESULT -> safeIntent
@@ -157,6 +159,9 @@ class MainRepository(
 
     override fun encodeServerList(guids: List<String>, groupId: String) =
         MmkvManager.encodeServerList(ArrayList(guids), groupId)
+
+    override fun renameProfilesInGroup(groupId: String, prefix: String): Int =
+        MmkvManager.renameServerProfiles(getServerGuidList(groupId), prefix)
 
     override fun removeServer(guid: String) = MmkvManager.removeServer(guid)
 

@@ -296,6 +296,40 @@ object MmkvManager {
         return key
     }
 
+    /** Renames an entire profile group and rolls back already-written entries on failure. */
+    fun renameServerProfiles(serverIds: List<String>, prefix: String): Int =
+        withProfileIndexLock {
+            val originals = linkedMapOf<String, String>()
+            val profiles = serverIds.distinct().mapNotNull { guid ->
+                val raw = profileFullStorage.decodeString(guid) ?: return@mapNotNull null
+                val profile = JsonUtil.fromJsonSafe(raw, ProfileItem::class.java)
+                    ?: return@mapNotNull null
+                originals[guid] = raw
+                guid to profile
+            }
+            val renamed = ProfileBatchRenamer.plan(prefix, profiles)
+            val written = mutableListOf<String>()
+
+            try {
+                renamed.forEach { (guid, profile) ->
+                    requireStorageWrite(
+                        profileFullStorage.encode(guid, JsonUtil.toJson(profile)),
+                        "Failed to rename profile $guid",
+                    )
+                    written += guid
+                }
+            } catch (error: Exception) {
+                val rollbackFailed = written.count { guid ->
+                    profileFullStorage.encode(guid, originals.getValue(guid)).not()
+                }
+                if (rollbackFailed > 0) {
+                    Log.e(TAG, "Failed to roll back $rollbackFailed renamed profiles", error)
+                }
+                throw error
+            }
+            renamed.size
+        }
+
     /**
      * Saves a profile batch before publishing its group index and removing replaced payloads.
      *

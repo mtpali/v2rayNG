@@ -9,17 +9,23 @@ class MainImportMenuTest {
     fun mainMoreMenuKeepsRealPingAndRemovesTcpOnlyTest() {
         assertEquals(
             listOf(
-                MainMoreMenuAction.RestartService,
                 MainMoreMenuAction.DeleteAll,
                 MainMoreMenuAction.DeleteDuplicate,
                 MainMoreMenuAction.DeleteInvalid,
                 MainMoreMenuAction.ExportAll,
-                MainMoreMenuAction.LocateSelected,
                 MainMoreMenuAction.SortByTestResults,
                 MainMoreMenuAction.TestAllRealPing,
                 MainMoreMenuAction.UpdateSubscriptions,
             ),
             MainMoreMenuAction.entries,
+        )
+    }
+
+    @Test
+    fun drawerExposesSubscriptionProfileRenameAction() {
+        assertEquals(
+            listOf(MainDrawerAction.RenameSubscriptionProfiles),
+            drawerActions,
         )
     }
 
