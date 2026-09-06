@@ -1,0 +1,133 @@
+name: Build ARMv7 F-Droid APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: armv7-fdroid-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+          cmdline-tools-version: '14742923'
+          packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
+
+      - name: Install NDK
+        run: |
+          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            --channel=0 \
+            --install "ndk;29.0.14206865"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+
+      - name: Restore libhevtun cache
+        id: cache-libhevtun-restore
+        uses: actions/cache/restore@v6
+        with:
+          path: libs
+          key: libhevtun-${{ runner.os }}-ndk29-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD', 'compile-hevtun.sh') }}
+
+      - name: Build libhevtun
+        if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
+        run: bash compile-hevtun.sh
+
+      - name: Save libhevtun cache
+        if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: libs
+          key: libhevtun-${{ runner.os }}-ndk29-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD', 'compile-hevtun.sh') }}
+
+      - name: Copy libhevtun
+        run: cp -r libs V2rayNG/app
+
+      - name: Setup Java
+        uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: AndroidLibXrayLite/go.mod
+          cache: true
+          cache-dependency-path: |
+            AndroidLibXrayLite/go.sum
+            core/patches/xray-core-amneziawg.patch
+
+      - name: Restore AmneziaWG libv2ray cache
+        id: awg-core-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: V2rayNG/app/libs/libv2ray.aar
+          key: awg-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+
+      - name: Build libv2ray with AmneziaWG v3
+        if: steps.awg-core-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          MOBILE_VERSION=$(awk '$1 == "golang.org/x/mobile" { print $2; exit }' AndroidLibXrayLite/go.mod)
+          test -n "$MOBILE_VERSION"
+          go install "golang.org/x/mobile/cmd/gomobile@$MOBILE_VERSION"
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          gomobile init
+          bash scripts/build-amnezia-libv2ray.sh V2rayNG/app/libs/libv2ray.aar
+
+      - name: Save AmneziaWG libv2ray cache
+        if: steps.awg-core-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: V2rayNG/app/libs/libv2ray.aar
+          key: awg-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+
+      - name: Test and build F-Droid ARMv7 APK
+        working-directory: V2rayNG
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          chmod 755 gradlew
+          ./gradlew :app:testFdroidDebugUnitTest :app:compileFdroidDebugKotlin \
+            :app:assembleFdroidDebug -PABI_FILTERS=armeabi-v7a
+
+      - name: Verify APK ABI and native libraries
+        run: |
+          set -euo pipefail
+          APK_PATH=$(find V2rayNG/app/build/outputs/apk/fdroid/debug \
+            -type f -name '*armeabi-v7a*.apk' -print -quit)
+          test -n "$APK_PATH"
+          unzip -Z1 "$APK_PATH" | grep -q '^lib/armeabi-v7a/libgojni.so$'
+          unzip -Z1 "$APK_PATH" | grep -q '^lib/armeabi-v7a/libhev-socks5-tunnel.so$'
+          unzip -Z1 "$APK_PATH" | grep -q '^lib/armeabi-v7a/libhevsockstun.so$'
+          if unzip -Z1 "$APK_PATH" | grep -Eq '^lib/(arm64-v8a|x86|x86_64)/'; then
+            echo "Unexpected non-ARMv7 native library in APK" >&2
+            exit 1
+          fi
+
+      - name: Upload ARMv7 F-Droid APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: v2rayNG-2.3.7-fdroid-armeabi-v7a
+          path: V2rayNG/app/build/outputs/apk/fdroid/debug/*armeabi-v7a*.apk
+          if-no-files-found: error
+          retention-days: 30
