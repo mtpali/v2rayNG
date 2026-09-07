@@ -11,11 +11,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 android_lib="$repo_root/AndroidLibXrayLite"
 core_patch="$repo_root/core/patches/xray-core-amneziawg.patch"
 output_aar="$(realpath -m "$1")"
-core_module="github.com/xtls/xray-core"
-core_version="$(
-    cd "$android_lib"
-    GOWORK=off go list -m -f '{{.Version}}' "$core_module"
-)"
+core_module="github.com/autorepobot/xray-core"
+core_version="v0.0.0-20260704054728-50c452881eb9"
 task_dir="$(mktemp -d)"
 patched_core="$task_dir/xray-core"
 wrapper="$task_dir/AndroidLibXrayLite"
@@ -41,7 +38,7 @@ cp -a "$core_source/." "$patched_core/"
 cp -a "$android_lib/." "$wrapper/"
 chmod -R u+w "$patched_core" "$wrapper"
 
-patch --batch --forward --silent -p1 -d "$patched_core" < "$core_patch"
+patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
 
 (
     cd "$patched_core"

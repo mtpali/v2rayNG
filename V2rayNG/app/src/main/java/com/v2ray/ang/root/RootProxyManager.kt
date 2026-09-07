@@ -2,7 +2,6 @@ package com.v2ray.ang.root
 
 import android.content.Context
 import android.os.Process
-import android.util.AtomicFile
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
@@ -110,27 +109,15 @@ object RootProxyManager {
             return null
         }
         val appUid = context.applicationInfo.uid
-        val socksUsername = SettingsManager.getSocksUsername()
-        val socksPassword = SettingsManager.getSocksPassword()
         val port = SettingsManager.getSocksPort()
-        val runDir = File(context.filesDir, AppConfig.ROOT_RUNTIME_DIR)
-        if (!runDir.isDirectory && !runDir.mkdirs()) {
-            LogUtil.e(AppConfig.TAG, "RootProxyManager: failed to create runtime directory at ${runDir.absolutePath}")
-            return null
-        }
+        val runDir = File(context.filesDir, AppConfig.ROOT_RUNTIME_DIR).apply { mkdirs() }
         val pidFile = File(runDir, "tun2socks.pid").absolutePath
         val logFile = File(runDir, "tun2socks.log").absolutePath
-        val cfgFile = File(runDir, "tun2socks.yml")
+        val cfgFile = File(runDir, "tun2socks.yml").absolutePath
         val oomGuardPid = File(runDir, "oomguard.pid").absolutePath
         val ipv6 = MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED)
         val lanShare = forceLanShare || MmkvManager.decodeSettingsBool(AppConfig.PREF_ROOT_LAN_SHARING)
         val corePid = Process.myPid()
-
-        val config = buildHevConfig(socksUsername, socksPassword, port, ipv6)
-        if (!writeHevConfig(cfgFile, config)) {
-            return null
-        }
-        val cfgPath = cfgFile.absolutePath
 
         // Per-app proxy/bypass (mirrors what VpnService does via allowed/disallowed apps).
         val perAppEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY)
@@ -152,9 +139,15 @@ object RootProxyManager {
             appendLine("echo \$! > '$oomGuardPid'")
             // tun device node
             appendLine("if [ ! -e /dev/net/tun ]; then mkdir -p /dev/net; mknod /dev/net/tun c 10 200; chmod 666 /dev/net/tun; fi")
-            // The HEV config is written separately by the app process. Never place credentials
-            // in this root shell script, even when YAML quoting would otherwise be valid.
-            appendLine("nohup \"\$BIN\" '$cfgPath' >'$logFile' 2>&1 &")
+            // hev-socks5-tunnel config: it creates the tun ($TUN) itself and forwards it to the
+            // in-process core's SOCKS inbound on loopback. MTU comes from the existing VPN MTU
+            // setting. No fwmark on hev's sockets: its only upstream connection is to 127.0.0.1
+            // (loopback, already RETURNed by the 127.0.0.0/8 bypass) and the core's real outbound
+            // runs as the app uid (RETURNed by the uid-owner rule), so traffic can't loop.
+            appendLine("cat > '$cfgFile' <<'HEVCFG'")
+            append(buildHevConfig(port, ipv6))
+            appendLine("HEVCFG")
+            appendLine("nohup \"\$BIN\" '$cfgFile' >'$logFile' 2>&1 &")
             appendLine("T2S_PID=\$!")
             appendLine("echo \$T2S_PID > '$pidFile'")
             appendLine("echo ${AppConfig.ROOT_OOM_SCORE} > /proc/\$T2S_PID/oom_score_adj 2>/dev/null || true")
@@ -202,7 +195,7 @@ object RootProxyManager {
      * tun address when IPv6 is enabled; whether v6 actually flows in is decided separately by
      * the v6 route into [TABLE].
      */
-    private fun buildHevConfig(socksUsername: String?, socksPassword: String?, socksPort: Int, ipv6: Boolean): String {
+    private fun buildHevConfig(socksPort: Int, ipv6: Boolean): String {
         val v4 = AppConfig.ROOT_TUN_ADDR_V4.substringBefore("/")
         val v6 = AppConfig.ROOT_TUN_ADDR_V6.substringBefore("/")
         return buildString {
@@ -216,31 +209,7 @@ object RootProxyManager {
             appendLine("  port: $socksPort")
             appendLine("  address: '${AppConfig.LOOPBACK}'")
             appendLine("  udp: 'udp'")
-            if (socksUsername != null && socksPassword != null) {
-                appendLine("  username: ${socksUsername.toSingleQuotedYamlScalar()}")
-                appendLine("  password: ${socksPassword.toSingleQuotedYamlScalar()}")
-            }
             appendLine("  tcp-fastopen: true")
-        }
-    }
-
-    private fun writeHevConfig(file: File, config: String): Boolean {
-        val atomicFile = AtomicFile(file)
-        val output = try {
-            atomicFile.startWrite()
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "RootProxyManager: failed to open HEV config at ${file.absolutePath}", e)
-            return false
-        }
-
-        return try {
-            output.write(config.toByteArray(Charsets.UTF_8))
-            atomicFile.finishWrite(output)
-            true
-        } catch (e: Exception) {
-            atomicFile.failWrite(output)
-            LogUtil.e(AppConfig.TAG, "RootProxyManager: failed to write HEV config at ${file.absolutePath}", e)
-            false
         }
     }
 
@@ -498,5 +467,3 @@ object RootProxyManager {
         }
     }
 }
-
-internal fun String.toSingleQuotedYamlScalar(): String = "'${replace("'", "''")}'"

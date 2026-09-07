@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: libs
-          key: libhevtun-${{ runner.os }}-ndk29-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD', 'compile-hevtun.sh') }}
+          key: libhevtun-226-${{ runner.os }}-ndk29-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD', 'compile-hevtun.sh') }}
 
       - name: Build libhevtun
         if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
@@ -57,7 +57,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: libs
-          key: libhevtun-${{ runner.os }}-ndk29-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD', 'compile-hevtun.sh') }}
+          key: libhevtun-226-${{ runner.os }}-ndk29-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD', 'compile-hevtun.sh') }}
 
       - name: Copy libhevtun
         run: cp -r libs V2rayNG/app
@@ -82,7 +82,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-226-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
 
       - name: Build libv2ray with AmneziaWG v3
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
@@ -100,7 +100,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-226-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
 
       - name: Test and build F-Droid ARMv7 APK
         working-directory: V2rayNG
@@ -131,7 +131,7 @@ jobs:
       - name: Upload ARMv7 F-Droid APK
         uses: actions/upload-artifact@v7
         with:
-          name: v2rayNG-2.3.7-fdroid-armeabi-v7a
+          name: v2rayNG-2.2.6-fdroid-armeabi-v7a
           path: V2rayNG/app/build/outputs/apk/fdroid/debug/*armeabi-v7a*.apk
           if-no-files-found: error
           retention-days: 30

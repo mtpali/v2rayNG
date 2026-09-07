@@ -15,11 +15,11 @@ class ProfileBatchRenamerTest {
             "third" to profile("Old C"),
         )
 
-        val result = ProfileBatchRenamer.plan("  MobileTina  ", source)
+        val result = ProfileBatchRenamer.plan("  v2rayNG  ", source)
 
         assertEquals(listOf("first", "second", "third"), result.keys.toList())
         assertEquals(
-            listOf("MobileTina 1", "MobileTina 2", "MobileTina 3"),
+            listOf("v2rayNG 1", "v2rayNG 2", "v2rayNG 3"),
             result.values.map { it.remarks },
         )
         assertEquals(listOf("Old A", "Old B", "Old C"), source.map { it.second.remarks })

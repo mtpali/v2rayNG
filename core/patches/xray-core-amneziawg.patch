@@ -1,94 +1,44 @@
 diff --git a/go.mod b/go.mod
-index d5af7f4..b75280f 100644
+index d5af7f40..b75280f4 100644
 --- a/go.mod
 +++ b/go.mod
-@@ -3,6 +3,7 @@ module github.com/xtls/xray-core
- go 1.26
- 
- require (
+@@ -5,0 +6 @@ require (
 +	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828
- 	github.com/apernet/quic-go v0.59.1-0.20260425001925-6c6cc9bcb716
- 	github.com/cloudflare/circl v1.6.4
- 	github.com/ghodss/yaml v1.0.1-0.20220118164431-d8423dcdf344
-@@ -29,7 +30,7 @@ require (
- 	golang.org/x/sync v0.21.0
- 	golang.org/x/sys v0.46.0
- 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2
+@@ -32 +33 @@ require (
 -	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb
 +	golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446
- 	golang.zx2c4.com/wireguard/windows v1.0.1
- 	google.golang.org/grpc v1.82.0
- 	google.golang.org/protobuf v1.36.11
-@@ -41,7 +42,7 @@ require (
- require (
- 	github.com/andybalholm/brotli v1.0.6 // indirect
- 	github.com/davecgh/go-spew v1.1.1 // indirect
+@@ -44 +45 @@ require (
 -	github.com/google/btree v1.1.2 // indirect
 +	github.com/google/btree v1.1.3 // indirect
- 	github.com/juju/ratelimit v1.0.2 // indirect
- 	github.com/klauspost/compress v1.17.4 // indirect
- 	github.com/kr/text v0.2.0 // indirect
 diff --git a/go.sum b/go.sum
-index 92ccc6b..8b7996e 100644
+index 92ccc6bb..8b7996e1 100644
 --- a/go.sum
 +++ b/go.sum
-@@ -1,3 +1,5 @@
+@@ -0,0 +1,2 @@
 +github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828 h1:D8d8gGvwXcTxUIsE4z6F6vjy4/VZddu95vMNtOygh1c=
 +github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828/go.mod h1:YoPc6qcOZqD7TXZ1xpedD8Sx3aSKsxN05ZqEFmXDNHk=
- github.com/andybalholm/brotli v1.0.6 h1:Yf9fFpf49Zrxb9NlQaluyE92/+X7UVHlhMNJN2sxfOI=
- github.com/andybalholm/brotli v1.0.6/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
- github.com/apernet/quic-go v0.59.1-0.20260425001925-6c6cc9bcb716 h1:J1O+xpLuJWkdYbw5JPGwBqIHs2J8tiEP7Py9lPqkN2I=
-@@ -19,8 +21,8 @@ github.com/golang/mock v1.7.0-rc.1 h1:YojYx61/OLFsiv6Rw1Z96LpldJIy31o+UHmwAUMJ6/
- github.com/golang/mock v1.7.0-rc.1/go.mod h1:s42URUywIqd+OcERslBJvOjepvNymP31m3q8d/GkuRs=
- github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=
- github.com/golang/protobuf v1.5.4/go.mod h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6rSs7xps=
+@@ -22,2 +24,2 @@ github.com/golang/protobuf v1.5.4/go.mod h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6
 -github.com/google/btree v1.1.2 h1:xf4v41cLI2Z6FxbKm+8Bu+m8ifhj15JuZ9sa0jZCMUU=
 -github.com/google/btree v1.1.2/go.mod h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4=
 +github.com/google/btree v1.1.3 h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg=
 +github.com/google/btree v1.1.3/go.mod h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4=
- github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
- github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
- github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
-@@ -92,6 +94,8 @@ go.opentelemetry.io/otel/sdk/metric v1.43.0 h1:S88dyqXjJkuBNLeMcVPRFXpRw2fuwdvfC
- go.opentelemetry.io/otel/sdk/metric v1.43.0/go.mod h1:C/RJtwSEJ5hzTiUz5pXF1kILHStzb9zFlIEe85bhj6A=
- go.opentelemetry.io/otel/trace v1.43.0 h1:BkNrHpup+4k4w+ZZ86CZoHHEkohws8AY+WTX09nk+3A=
- go.opentelemetry.io/otel/trace v1.43.0/go.mod h1:/QJhyVBUUswCphDVxq+8mld+AvhXZLhe+8WVFxiFff0=
+@@ -94,0 +97,2 @@ go.opentelemetry.io/otel/trace v1.43.0/go.mod h1:/QJhyVBUUswCphDVxq+8mld+AvhXZLh
 +go.uber.org/atomic v1.11.0 h1:ZvwS0R+56ePWxUNi+Atn9dWONBPp/AUETXlHW0DxSjE=
 +go.uber.org/atomic v1.11.0/go.mod h1:LUxbIzbOniOlMKjJjyPfpl4v+PKK2cNJn91OQbhoJI0=
- go.uber.org/mock v0.5.2 h1:LbtPTcP8A5k9WPXj54PPPbjcI4Y6lhyOZXn+VS7wNko=
- go.uber.org/mock v0.5.2/go.mod h1:wLlUxC2vVTPTaE3UD51E0BGOAElKrILxhVSDYQLld5o=
- go4.org/netipx v0.0.0-20231129151722-fdeea329fbba h1:0b9z3AuHCjxk0x/opv64kcgZLBseWJUpBw5I82+2U4M=
-@@ -141,8 +145,8 @@ golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8T
- golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
- golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 h1:B82qJJgjvYKsXS9jeunTOisW56dUokqW/FOteYJJ/yg=
- golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2/go.mod h1:deeaetjYA+DHMHg+sMSMI58GrEteJUUzzw7en6TJQcI=
+@@ -144,2 +148,2 @@ golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2/go.mod h1:deeaetjYA+D
 -golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb h1:whnFRlWMcXI9d+ZbWg+4sHnLp52d5yiIPUxMBSt4X9A=
 -golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb/go.mod h1:rpwXGsirqLqN2L0JDJQlwOboGHmptD5ZD6T2VmcqhTw=
 +golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446 h1:cqHQ3AycTHvM2R7ikgyX57D+XvtcSnGylsLkOVhta/w=
 +golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446/go.mod h1:rpwXGsirqLqN2L0JDJQlwOboGHmptD5ZD6T2VmcqhTw=
- golang.zx2c4.com/wireguard/windows v1.0.1 h1:eOxiDVbywPC+ZQqvdCK7x+ZwWXKbYv50TtH8ysFIbw8=
- golang.zx2c4.com/wireguard/windows v1.0.1/go.mod h1:+fbT3FFdX4zzYDLwJh5+HPEcNN/3HyNdzhNSVsQM+zs=
- gonum.org/v1/gonum v0.17.0 h1:VbpOemQlsSMrYmn7T2OUvQ4dqxQXU+ouZFQsZOx50z4=
 diff --git a/infra/conf/wireguard.go b/infra/conf/wireguard.go
-index 8131be2..7ba71f9 100644
+index 8131be28..7ba71f90 100644
 --- a/infra/conf/wireguard.go
 +++ b/infra/conf/wireguard.go
-@@ -3,9 +3,11 @@ package conf
- import (
- 	"encoding/base64"
- 	"encoding/hex"
+@@ -5,0 +6 @@ import (
 +	"fmt"
- 	"strconv"
- 	"strings"
- 
+@@ -8,0 +10 @@ import (
 +	awgdevice "github.com/amnezia-vpn/amneziawg-go/v3/device"
- 	"github.com/xtls/xray-core/common/errors"
- 	"github.com/xtls/xray-core/common/protocol"
- 	"github.com/xtls/xray-core/common/serial"
-@@ -66,6 +68,155 @@ type WireGuardConfig struct {
- 	MTU            int32                  `json:"mtu"`
- 	Reserved       []byte                 `json:"reserved"`
- 	DomainStrategy string                 `json:"domainStrategy"`
+@@ -68,0 +71,149 @@ type WireGuardConfig struct {
 +	Amnezia        *AmneziaWGConfig       `json:"amnezia,omitempty"`
 +}
 +
@@ -238,23 +188,78 @@ index 8131be2..7ba71f9 100644
 +		request.WriteString("disable_cookies=true\n")
 +	}
 +	return request.String(), nil
- }
- 
- func (c *WireGuardConfig) Build() (proto.Message, error) {
-@@ -123,6 +274,10 @@ func (c *WireGuardConfig) Build() (proto.Message, error) {
- 		return nil, errors.New(`"reserved" should be empty or 3 bytes`)
- 	}
- 	config.Reserved = c.Reserved
+@@ -125,0 +277,4 @@ func (c *WireGuardConfig) Build() (proto.Message, error) {
 +	config.AmneziaConfig, err = c.Amnezia.BuildIPC()
 +	if err != nil {
 +		return nil, err
 +	}
- 
- 	switch strings.ToLower(c.DomainStrategy) {
- 	case "forceip", "":
+diff --git a/infra/conf/wireguard_amnezia_runtime_test.go b/infra/conf/wireguard_amnezia_runtime_test.go
+new file mode 100644
+index 00000000..a6047931
+--- /dev/null
++++ b/infra/conf/wireguard_amnezia_runtime_test.go
+@@ -0,0 +1,58 @@
++package conf_test
++
++import (
++	"encoding/json"
++	"strings"
++	"testing"
++
++	core "github.com/xtls/xray-core/core"
++	conf "github.com/xtls/xray-core/infra/conf"
++	_ "github.com/xtls/xray-core/main/distro/all"
++)
++
++func TestAmneziaWGRealWorldOutboundInitializes(t *testing.T) {
++	settings, err := json.Marshal(map[string]any{
++		"secretKey":      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
++		"address":        []string{"10.187.192.50/30"},
++		"mtu":            1280,
++		"domainStrategy": "ForceIPv4",
++		"peers": []map[string]any{{
++			"publicKey":  "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
++			"endpoint":   "192.0.2.1:51820",
++			"keepAlive":  1500,
++			"allowedIPs": []string{"0.0.0.0/0", "::/0"},
++		}},
++		"amnezia": map[string]any{
++			"jc": 4, "jmin": 40, "jmax": 70,
++			"h1": "1", "h2": "2", "h3": "3", "h4": "4",
++			"i1": byteChain(348),
++			"i2": byteChain(245),
++		},
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	raw := json.RawMessage(settings)
++	built, err := (&conf.Config{
++		OutboundConfigs: []conf.OutboundDetourConfig{{
++			Protocol: "wireguard",
++			Tag:      "proxy",
++			Settings: &raw,
++		}},
++	}).Build()
++	if err != nil {
++		t.Fatalf("failed to build real-world AmneziaWG config: %v", err)
++	}
++
++	instance, err := core.New(built)
++	if err != nil {
++		t.Fatalf("failed to initialize real-world AmneziaWG outbound: %v", err)
++	}
++	if err := instance.Close(); err != nil {
++		t.Fatalf("failed to close test instance: %v", err)
++	}
++}
++
++func byteChain(byteCount int) string {
++	return "<b 0x" + strings.Repeat("ab", byteCount) + ">"
++}
 diff --git a/infra/conf/wireguard_amnezia_test.go b/infra/conf/wireguard_amnezia_test.go
 new file mode 100644
-index 0000000..35064be
+index 00000000..35064be3
 --- /dev/null
 +++ b/infra/conf/wireguard_amnezia_test.go
 @@ -0,0 +1,57 @@
@@ -315,307 +320,6 @@ index 0000000..35064be
 +		}
 +	}
 +}
-diff --git a/proxy/wireguard/bind.go b/proxy/wireguard/bind.go
-index 0e71e15..81d8ccc 100644
---- a/proxy/wireguard/bind.go
-+++ b/proxy/wireguard/bind.go
-@@ -10,9 +10,9 @@ import (
- 	"sync"
- 	"syscall"
- 
-+	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
- 	"github.com/xtls/xray-core/common"
- 	"github.com/xtls/xray-core/common/errors"
--	"golang.zx2c4.com/wireguard/conn"
- )
- 
- type bind struct {
-@@ -22,0 +23 @@ type bind struct {
-+	preservePacketHeader bool
-@@ -28,0 +30,8 @@ type bind struct {
-+func normalizeIncomingPacket(packet []byte, preservePacketHeader bool) {
-+	if !preservePacketHeader && len(packet) > 3 {
-+		packet[1] = 0
-+		packet[2] = 0
-+		packet[3] = 0
-+	}
-+}
-+
-@@ -66,5 +75 @@ func (b *bind) Open(port uint16) (fns []conn.ReceiveFunc, actualPort uint16, err
--				if n > 3 {
--					bufs[0][1] = 0
--					bufs[0][2] = 0
--					bufs[0][3] = 0
--				}
-+				normalizeIncomingPacket(bufs[0][:n], b.preservePacketHeader)
-diff --git a/proxy/wireguard/bind_test.go b/proxy/wireguard/bind_test.go
-new file mode 100644
-index 0000000..15d240a
---- /dev/null
-+++ b/proxy/wireguard/bind_test.go
-@@ -0,0 +1,34 @@
-+package wireguard
-+
-+import (
-+	"bytes"
-+	"testing"
-+)
-+
-+func TestNormalizeIncomingPacket(t *testing.T) {
-+	tests := []struct {
-+		name                 string
-+		preservePacketHeader bool
-+		want                 []byte
-+	}{
-+		{
-+			name: "standard WireGuard clears reserved bytes",
-+			want: []byte{4, 0, 0, 0},
-+		},
-+		{
-+			name:                 "AmneziaWG preserves its 32-bit header",
-+			preservePacketHeader: true,
-+			want:                 []byte{4, 3, 2, 1},
-+		},
-+	}
-+
-+	for _, test := range tests {
-+		t.Run(test.name, func(t *testing.T) {
-+			packet := []byte{4, 3, 2, 1}
-+			normalizeIncomingPacket(packet, test.preservePacketHeader)
-+			if !bytes.Equal(packet, test.want) {
-+				t.Fatalf("got %v, want %v", packet, test.want)
-+			}
-+		})
-+	}
-+}
-diff --git a/proxy/wireguard/client.go b/proxy/wireguard/client.go
-index 4491886..a047b3b 100644
---- a/proxy/wireguard/client.go
-+++ b/proxy/wireguard/client.go
-@@ -9,8 +9,9 @@ import (
- 	"strings"
- 	"sync"
- 
--	"golang.zx2c4.com/wireguard/tun"
-+	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
- 
-+	"github.com/amnezia-vpn/amneziawg-go/v3/device"
- 	"github.com/xtls/xray-core/common"
- 	"github.com/xtls/xray-core/common/buf"
- 	"github.com/xtls/xray-core/common/dice"
-@@ -27,7 +28,6 @@ import (
- 	"github.com/xtls/xray-core/features/stats"
- 	"github.com/xtls/xray-core/transport"
- 	"github.com/xtls/xray-core/transport/internet"
--	"golang.zx2c4.com/wireguard/device"
- )
- 
- type Handler struct {
-@@ -316,0 +317 @@ func (h *Handler) init(ctx context.Context) error {
-+	bind.preservePacketHeader = h.conf.AmneziaConfig != ""
-@@ -318,0 +320,6 @@ func (h *Handler) init(ctx context.Context) error {
-+	if h.conf.AmneziaConfig != "" {
-+		cfg.WriteString(h.conf.AmneziaConfig)
-+		if !strings.HasSuffix(h.conf.AmneziaConfig, "\n") {
-+			cfg.WriteByte('\n')
-+		}
-+	}
-diff --git a/proxy/wireguard/config.pb.go b/proxy/wireguard/config.pb.go
-index 59db656..ec92b5a 100644
---- a/proxy/wireguard/config.pb.go
-+++ b/proxy/wireguard/config.pb.go
-@@ -164,8 +164,11 @@ type DeviceConfig struct {
- 	DomainStrategy DeviceConfig_DomainStrategy `protobuf:"varint,7,opt,name=domain_strategy,json=domainStrategy,proto3,enum=xray.proxy.wireguard.DeviceConfig_DomainStrategy" json:"domain_strategy,omitempty"`
- 	IsClient       bool                        `protobuf:"varint,8,opt,name=is_client,json=isClient,proto3" json:"is_client,omitempty"`
- 	NoKernelTun    bool                        `protobuf:"varint,9,opt,name=no_kernel_tun,json=noKernelTun,proto3" json:"no_kernel_tun,omitempty"`
--	unknownFields  protoimpl.UnknownFields
--	sizeCache      protoimpl.SizeCache
-+	// Validated AmneziaWG device UAPI options. Empty retains standard
-+	// WireGuard-compatible behavior.
-+	AmneziaConfig string `protobuf:"bytes,10,opt,name=amnezia_config,json=amneziaConfig,proto3" json:"amnezia_config,omitempty"`
-+	unknownFields protoimpl.UnknownFields
-+	sizeCache     protoimpl.SizeCache
- }
- 
- func (x *DeviceConfig) Reset() {
-@@ -261,6 +264,13 @@ func (x *DeviceConfig) GetNoKernelTun() bool {
- 	return false
- }
- 
-+func (x *DeviceConfig) GetAmneziaConfig() string {
-+	if x != nil {
-+		return x.AmneziaConfig
-+	}
-+	return ""
-+}
-+
- var File_proxy_wireguard_config_proto protoreflect.FileDescriptor
- 
- const file_proxy_wireguard_config_proto_rawDesc = "" +
-@@ -275,7 +285,7 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
- 	"\n" +
- 	"keep_alive\x18\x04 \x01(\tR\tkeepAlive\x12\x1f\n" +
- 	"\vallowed_ips\x18\x05 \x03(\tR\n" +
--	"allowedIps\"\xdc\x03\n" +
-+	"allowedIps\"\x83\x04\n" +
- 	"\fDeviceConfig\x12\x1d\n" +
- 	"\n" +
- 	"secret_key\x18\x01 \x01(\tR\tsecretKey\x12\x1a\n" +
-@@ -286,7 +296,9 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
- 	"\breserved\x18\x06 \x01(\fR\breserved\x12Z\n" +
- 	"\x0fdomain_strategy\x18\a \x01(\x0e21.xray.proxy.wireguard.DeviceConfig.DomainStrategyR\x0edomainStrategy\x12\x1b\n" +
- 	"\tis_client\x18\b \x01(\bR\bisClient\x12\"\n" +
--	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\"\\\n" +
-+	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\x12%\n" +
-+	"\x0eamnezia_config\x18\n" +
-+	" \x01(\tR\ramneziaConfig\"\\\n" +
- 	"\x0eDomainStrategy\x12\f\n" +
- 	"\bFORCE_IP\x10\x00\x12\r\n" +
- 	"\tFORCE_IP4\x10\x01\x12\r\n" +
-diff --git a/proxy/wireguard/config.proto b/proxy/wireguard/config.proto
-index 171d5b2..366bf84 100644
---- a/proxy/wireguard/config.proto
-+++ b/proxy/wireguard/config.proto
-@@ -34,4 +34,7 @@ message DeviceConfig {
-   DomainStrategy domain_strategy = 7;
-   bool is_client = 8;
-   bool no_kernel_tun = 9;
--}
-\ No newline at end of file
-+  // Validated AmneziaWG device UAPI options. Empty retains standard
-+  // WireGuard-compatible behavior.
-+  string amnezia_config = 10;
-+}
-diff --git a/proxy/wireguard/netstack.go b/proxy/wireguard/netstack.go
-index 22c42e3..3040cd9 100644
---- a/proxy/wireguard/netstack.go
-+++ b/proxy/wireguard/netstack.go
-@@ -19,8 +19,8 @@ import (
- 	"syscall"
- 	"time"
- 
-+	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
- 	"github.com/xtls/xray-core/transport/internet"
--	"golang.zx2c4.com/wireguard/tun"
- 
- 	"golang.org/x/net/dns/dnsmessage"
- 	"gvisor.dev/gvisor/pkg/buffer"
-diff --git a/proxy/wireguard/server.go b/proxy/wireguard/server.go
-index e26479a..7a8ea40 100644
---- a/proxy/wireguard/server.go
-+++ b/proxy/wireguard/server.go
-@@ -9,6 +9,8 @@ import (
- 	"strings"
- 	"sync"
- 
-+	"github.com/amnezia-vpn/amneziawg-go/v3/device"
-+	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
- 	"github.com/xtls/xray-core/common"
- 	"github.com/xtls/xray-core/common/buf"
- 	c "github.com/xtls/xray-core/common/ctx"
-@@ -25,8 +27,6 @@ import (
- 	"github.com/xtls/xray-core/transport/internet"
- 	"github.com/xtls/xray-core/transport/internet/stat"
- 	"golang.org/x/crypto/curve25519"
--	"golang.zx2c4.com/wireguard/device"
--	"golang.zx2c4.com/wireguard/tun"
- 	"gvisor.dev/gvisor/pkg/tcpip/stack"
- )
- 
-diff --git a/proxy/wireguard/tun_default.go b/proxy/wireguard/tun_default.go
-index edad554..7e8ed17 100644
---- a/proxy/wireguard/tun_default.go
-+++ b/proxy/wireguard/tun_default.go
-@@ -6,7 +6,7 @@ import (
- 	"errors"
- 	"net/netip"
- 
--	"golang.zx2c4.com/wireguard/tun"
-+	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
- )
- 
- func createKernelTun([]netip.Addr, []netip.Addr, int) (tdev tun.Device, tnet *Net, err error) {
-diff --git a/proxy/wireguard/tun_linux.go b/proxy/wireguard/tun_linux.go
-index eb01754..cebc426 100644
---- a/proxy/wireguard/tun_linux.go
-+++ b/proxy/wireguard/tun_linux.go
-@@ -14,10 +14,10 @@ import (
- 
- 	"golang.org/x/sys/unix"
- 
-+	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
- 	"github.com/vishvananda/netlink"
- 	"github.com/xtls/xray-core/common/errors"
- 	"github.com/xtls/xray-core/transport/internet"
--	"golang.zx2c4.com/wireguard/tun"
- )
- 
- var (
-diff --git a/infra/conf/wireguard_amnezia_runtime_test.go b/infra/conf/wireguard_amnezia_runtime_test.go
-new file mode 100644
-index 00000000..e04c613a
---- /dev/null
-+++ b/infra/conf/wireguard_amnezia_runtime_test.go
-@@ -0,0 +1,59 @@
-+package conf_test
-+
-+import (
-+	"encoding/json"
-+	"strings"
-+	"testing"
-+
-+	core "github.com/xtls/xray-core/core"
-+	conf "github.com/xtls/xray-core/infra/conf"
-+	_ "github.com/xtls/xray-core/main/distro/all"
-+)
-+
-+func TestAmneziaWGRealWorldOutboundInitializes(t *testing.T) {
-+	settings, err := json.Marshal(map[string]any{
-+		"secretKey":   "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-+		"address":     []string{"10.187.192.50/30"},
-+		"mtu":         1280,
-+		"noKernelTun": true,
-+		"domainStrategy": "ForceIPv4",
-+		"peers": []map[string]any{{
-+			"publicKey":  "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
-+			"endpoint":   "192.0.2.1:51820",
-+			"keepAlive":  1500,
-+			"allowedIPs": []string{"0.0.0.0/0", "::/0"},
-+		}},
-+		"amnezia": map[string]any{
-+			"jc": 4, "jmin": 40, "jmax": 70,
-+			"h1": "1", "h2": "2", "h3": "3", "h4": "4",
-+			"i1": byteChain(348),
-+			"i2": byteChain(245),
-+		},
-+	})
-+	if err != nil {
-+		t.Fatal(err)
-+	}
-+	raw := json.RawMessage(settings)
-+	built, err := (&conf.Config{
-+		OutboundConfigs: []conf.OutboundDetourConfig{{
-+			Protocol: "wireguard",
-+			Tag:      "proxy",
-+			Settings: &raw,
-+		}},
-+	}).Build()
-+	if err != nil {
-+		t.Fatalf("failed to build real-world AmneziaWG config: %v", err)
-+	}
-+
-+	instance, err := core.New(built)
-+	if err != nil {
-+		t.Fatalf("failed to initialize real-world AmneziaWG outbound: %v", err)
-+	}
-+	if err := instance.Close(); err != nil {
-+		t.Fatalf("failed to close test instance: %v", err)
-+	}
-+}
-+
-+func byteChain(byteCount int) string {
-+	return "<b 0x" + strings.Repeat("ab", byteCount) + ">"
-+}
 diff --git a/proxy/wireguard/amnezia_device_test.go b/proxy/wireguard/amnezia_device_test.go
 new file mode 100644
 index 00000000..42302917
@@ -668,3 +372,101 @@ index 00000000..42302917
 +func realWorldByteChain(byteCount int) string {
 +	return "<b 0x" + strings.Repeat("ab", byteCount) + ">"
 +}
+diff --git a/proxy/wireguard/bind.go b/proxy/wireguard/bind.go
+index 0e71e153..81d8ccca 100644
+--- a/proxy/wireguard/bind.go
++++ b/proxy/wireguard/bind.go
+@@ -12,0 +13 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
+@@ -15 +15,0 @@ import (
+-	"golang.zx2c4.com/wireguard/conn"
+diff --git a/proxy/wireguard/client.go b/proxy/wireguard/client.go
+index 4491886a..a047b3b0 100644
+--- a/proxy/wireguard/client.go
++++ b/proxy/wireguard/client.go
+@@ -12 +12 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+@@ -13,0 +14 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/device"
+@@ -30 +30,0 @@ import (
+-	"golang.zx2c4.com/wireguard/device"
+@@ -321,0 +322,6 @@ func (h *Handler) init(ctx context.Context) error {
++	if h.conf.AmneziaConfig != "" {
++		cfg.WriteString(h.conf.AmneziaConfig)
++		if !strings.HasSuffix(h.conf.AmneziaConfig, "\n") {
++			cfg.WriteByte('\n')
++		}
++	}
+diff --git a/proxy/wireguard/config.pb.go b/proxy/wireguard/config.pb.go
+index 59db6564..ec92b5a7 100644
+--- a/proxy/wireguard/config.pb.go
++++ b/proxy/wireguard/config.pb.go
+@@ -167,2 +167,5 @@ type DeviceConfig struct {
+-	unknownFields  protoimpl.UnknownFields
+-	sizeCache      protoimpl.SizeCache
++	// Validated AmneziaWG device UAPI options. Empty retains standard
++	// WireGuard-compatible behavior.
++	AmneziaConfig string `protobuf:"bytes,10,opt,name=amnezia_config,json=amneziaConfig,proto3" json:"amnezia_config,omitempty"`
++	unknownFields protoimpl.UnknownFields
++	sizeCache     protoimpl.SizeCache
+@@ -263,0 +267,7 @@ func (x *DeviceConfig) GetNoKernelTun() bool {
++func (x *DeviceConfig) GetAmneziaConfig() string {
++	if x != nil {
++		return x.AmneziaConfig
++	}
++	return ""
++}
++
+@@ -278 +288 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
+-	"allowedIps\"\xdc\x03\n" +
++	"allowedIps\"\x83\x04\n" +
+@@ -289 +299,3 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
+-	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\"\\\n" +
++	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\x12%\n" +
++	"\x0eamnezia_config\x18\n" +
++	" \x01(\tR\ramneziaConfig\"\\\n" +
+diff --git a/proxy/wireguard/config.proto b/proxy/wireguard/config.proto
+index 171d5b21..366bf845 100644
+--- a/proxy/wireguard/config.proto
++++ b/proxy/wireguard/config.proto
+@@ -37 +37,4 @@ message DeviceConfig {
+-}
+\ No newline at end of file
++  // Validated AmneziaWG device UAPI options. Empty retains standard
++  // WireGuard-compatible behavior.
++  string amnezia_config = 10;
++}
+diff --git a/proxy/wireguard/netstack.go b/proxy/wireguard/netstack.go
+index 22c42e3f..3040cd96 100644
+--- a/proxy/wireguard/netstack.go
++++ b/proxy/wireguard/netstack.go
+@@ -21,0 +22 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+@@ -23 +23,0 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
+diff --git a/proxy/wireguard/server.go b/proxy/wireguard/server.go
+index e26479ad..7a8ea40d 100644
+--- a/proxy/wireguard/server.go
++++ b/proxy/wireguard/server.go
+@@ -11,0 +12,2 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/device"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+@@ -28,2 +29,0 @@ import (
+-	"golang.zx2c4.com/wireguard/device"
+-	"golang.zx2c4.com/wireguard/tun"
+diff --git a/proxy/wireguard/tun_default.go b/proxy/wireguard/tun_default.go
+index edad5545..7e8ed171 100644
+--- a/proxy/wireguard/tun_default.go
++++ b/proxy/wireguard/tun_default.go
+@@ -9 +9 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+diff --git a/proxy/wireguard/tun_linux.go b/proxy/wireguard/tun_linux.go
+index eb017547..cebc426c 100644
+--- a/proxy/wireguard/tun_linux.go
++++ b/proxy/wireguard/tun_linux.go
+@@ -16,0 +17 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+@@ -20 +20,0 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
