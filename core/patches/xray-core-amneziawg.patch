@@ -330,6 +330,64 @@ index 0e71e15..81d8ccc 100644
  )
  
  type bind struct {
+@@ -22,0 +23 @@ type bind struct {
++	preservePacketHeader bool
+@@ -28,0 +30,8 @@ type bind struct {
++func normalizeIncomingPacket(packet []byte, preservePacketHeader bool) {
++	if !preservePacketHeader && len(packet) > 3 {
++		packet[1] = 0
++		packet[2] = 0
++		packet[3] = 0
++	}
++}
++
+@@ -66,5 +75 @@ func (b *bind) Open(port uint16) (fns []conn.ReceiveFunc, actualPort uint16, err
+-				if n > 3 {
+-					bufs[0][1] = 0
+-					bufs[0][2] = 0
+-					bufs[0][3] = 0
+-				}
++				normalizeIncomingPacket(bufs[0][:n], b.preservePacketHeader)
+diff --git a/proxy/wireguard/bind_test.go b/proxy/wireguard/bind_test.go
+new file mode 100644
+index 0000000..15d240a
+--- /dev/null
++++ b/proxy/wireguard/bind_test.go
+@@ -0,0 +1,34 @@
++package wireguard
++
++import (
++	"bytes"
++	"testing"
++)
++
++func TestNormalizeIncomingPacket(t *testing.T) {
++	tests := []struct {
++		name                 string
++		preservePacketHeader bool
++		want                 []byte
++	}{
++		{
++			name: "standard WireGuard clears reserved bytes",
++			want: []byte{4, 0, 0, 0},
++		},
++		{
++			name:                 "AmneziaWG preserves its 32-bit header",
++			preservePacketHeader: true,
++			want:                 []byte{4, 3, 2, 1},
++		},
++	}
++
++	for _, test := range tests {
++		t.Run(test.name, func(t *testing.T) {
++			packet := []byte{4, 3, 2, 1}
++			normalizeIncomingPacket(packet, test.preservePacketHeader)
++			if !bytes.Equal(packet, test.want) {
++				t.Fatalf("got %v, want %v", packet, test.want)
++			}
++		})
++	}
++}
 diff --git a/proxy/wireguard/client.go b/proxy/wireguard/client.go
 index 4491886..a047b3b 100644
 --- a/proxy/wireguard/client.go
@@ -353,19 +411,15 @@ index 4491886..a047b3b 100644
  )
  
  type Handler struct {
-@@ -319,6 +319,12 @@ func (h *Handler) init(ctx context.Context) error {
- 	bind.reserved = h.conf.Reserved
- 	var cfg strings.Builder
- 	cfg.WriteString("private_key=" + h.conf.SecretKey + "\n")
+@@ -316,0 +317 @@ func (h *Handler) init(ctx context.Context) error {
++	bind.preservePacketHeader = h.conf.AmneziaConfig != ""
+@@ -318,0 +320,6 @@ func (h *Handler) init(ctx context.Context) error {
 +	if h.conf.AmneziaConfig != "" {
 +		cfg.WriteString(h.conf.AmneziaConfig)
 +		if !strings.HasSuffix(h.conf.AmneziaConfig, "\n") {
 +			cfg.WriteByte('\n')
 +		}
 +	}
- 	for _, peer := range h.conf.Peers {
- 		cfg.WriteString("public_key=" + peer.PublicKey + "\n")
- 		if peer.PreSharedKey != "" {
 diff --git a/proxy/wireguard/config.pb.go b/proxy/wireguard/config.pb.go
 index 59db656..ec92b5a 100644
 --- a/proxy/wireguard/config.pb.go
@@ -497,4 +551,3 @@ index eb01754..cebc426 100644
  )
  
  var (
-
