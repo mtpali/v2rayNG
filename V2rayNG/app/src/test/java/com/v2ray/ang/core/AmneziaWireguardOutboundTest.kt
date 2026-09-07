@@ -52,11 +52,15 @@ class AmneziaWireguardOutboundTest {
         assertEquals(i1, amnezia.i1)
         assertEquals(i2, amnezia.i2)
 
-        val json = JsonUtil.toJson(outbound)
-        assertTrue(json.contains("\"noKernelTun\":true"))
-        assertTrue(json.contains("\"keepAlive\":1500"))
-        assertTrue(json.contains("\"i1\":\"$i1\""))
-        assertFalse(json.contains("\"reserved\""))
+        val settingsJson = requireNotNull(JsonUtil.parseString(JsonUtil.toJson(outbound)))
+            .getAsJsonObject("settings")
+        val peerJson = settingsJson.getAsJsonArray("peers").single().asJsonObject
+        val amneziaJson = settingsJson.getAsJsonObject("amnezia")
+
+        assertTrue(settingsJson.get("noKernelTun").asBoolean)
+        assertEquals(1500, peerJson.get("keepAlive").asInt)
+        assertEquals(i1, amneziaJson.get("i1").asString)
+        assertFalse(settingsJson.has("reserved"))
     }
 
     private fun byteChain(byteCount: Int): String =
