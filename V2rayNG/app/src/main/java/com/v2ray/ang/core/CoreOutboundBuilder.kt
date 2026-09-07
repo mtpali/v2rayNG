@@ -236,17 +236,30 @@ object CoreOutboundBuilder {
     }
 
     private fun toOutboundWireguard(profileItem: ProfileItem): OutboundBean? {
+        return toOutboundWireguard(
+            profileItem,
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true,
+        )
+    }
+
+    internal fun toOutboundWireguard(
+        profileItem: ProfileItem,
+        ipv6Enabled: Boolean,
+    ): OutboundBean? {
         val outboundBean = createInitOutbound(EConfigType.WIREGUARD)
 
         val addresses = WireguardAddressPolicy.activeAddresses(
             profileItem.localAddress,
-            MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true,
+            ipv6Enabled,
         )
 
         outboundBean?.settings?.let { wireguard ->
             wireguard.secretKey = profileItem.secretKey
             wireguard.address = addresses
             wireguard.domainStrategy = WireguardAddressPolicy.domainStrategy(addresses)
+            // Android VPN apps do not own CAP_NET_ADMIN. Force Xray's userspace gVisor path
+            // instead of relying on platform-specific capability probing during core startup.
+            wireguard.noKernelTun = true
             wireguard.peers?.firstOrNull()?.let { peer ->
                 peer.publicKey = profileItem.publicKey.orEmpty()
                 peer.preSharedKey = profileItem.preSharedKey?.nullIfBlank()

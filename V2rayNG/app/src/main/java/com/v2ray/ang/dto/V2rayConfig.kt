@@ -99,6 +99,7 @@ data class V2rayConfig(
             var reserved: List<Int>? = null,
             var mtu: Int? = null,
             var domainStrategy: String? = null,
+            var noKernelTun: Boolean? = null,
             var amnezia: AmneziaWGOptionsBean? = null,
         ) {
 

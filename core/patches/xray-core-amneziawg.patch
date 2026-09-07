@@ -551,3 +551,119 @@ index eb01754..cebc426 100644
  )
  
  var (
+diff --git a/infra/conf/wireguard_amnezia_runtime_test.go b/infra/conf/wireguard_amnezia_runtime_test.go
+new file mode 100644
+index 00000000..e04c613a
+--- /dev/null
++++ b/infra/conf/wireguard_amnezia_runtime_test.go
+@@ -0,0 +1,58 @@
++package conf_test
++
++import (
++	"encoding/json"
++	"strings"
++	"testing"
++
++	core "github.com/xtls/xray-core/core"
++	conf "github.com/xtls/xray-core/infra/conf"
++)
++
++func TestAmneziaWGRealWorldOutboundInitializes(t *testing.T) {
++	settings, err := json.Marshal(map[string]any{
++		"secretKey":   "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
++		"address":     []string{"10.187.192.50/30"},
++		"mtu":         1280,
++		"noKernelTun": true,
++		"domainStrategy": "ForceIPv4",
++		"peers": []map[string]any{{
++			"publicKey":  "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
++			"endpoint":   "192.0.2.1:51820",
++			"keepAlive":  1500,
++			"allowedIPs": []string{"0.0.0.0/0", "::/0"},
++		}},
++		"amnezia": map[string]any{
++			"jc": 4, "jmin": 40, "jmax": 70,
++			"h1": "1", "h2": "2", "h3": "3", "h4": "4",
++			"i1": byteChain(348),
++			"i2": byteChain(245),
++		},
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	raw := json.RawMessage(settings)
++	built, err := (&conf.Config{
++		OutboundConfigs: []conf.OutboundDetourConfig{{
++			Protocol: "wireguard",
++			Tag:      "proxy",
++			Settings: &raw,
++		}},
++	}).Build()
++	if err != nil {
++		t.Fatalf("failed to build real-world AmneziaWG config: %v", err)
++	}
++
++	instance, err := core.New(built)
++	if err != nil {
++		t.Fatalf("failed to initialize real-world AmneziaWG outbound: %v", err)
++	}
++	if err := instance.Close(); err != nil {
++		t.Fatalf("failed to close test instance: %v", err)
++	}
++}
++
++func byteChain(byteCount int) string {
++	return "<b 0x" + strings.Repeat("ab", byteCount) + ">"
++}
+diff --git a/proxy/wireguard/amnezia_device_test.go b/proxy/wireguard/amnezia_device_test.go
+new file mode 100644
+index 00000000..42302917
+--- /dev/null
++++ b/proxy/wireguard/amnezia_device_test.go
+@@ -0,0 +1,46 @@
++package wireguard
++
++import (
++	"strings"
++	"testing"
++
++	awgconn "github.com/amnezia-vpn/amneziawg-go/v3/conn"
++	awgdevice "github.com/amnezia-vpn/amneziawg-go/v3/device"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun/tuntest"
++)
++
++func TestAmneziaWGDeviceAcceptsRealWorldLongInitPackets(t *testing.T) {
++	tunDevice := tuntest.NewChannelTUN()
++	device := awgdevice.NewDevice(
++		tunDevice.TUN(),
++		awgconn.NewDefaultBind(),
++		awgdevice.NewLogger(awgdevice.LogLevelError, ""),
++	)
++	defer device.Close()
++
++	configuration := strings.Join([]string{
++		"private_key=" + strings.Repeat("01", 32),
++		"jc=4",
++		"jmin=40",
++		"jmax=70",
++		"h1=1",
++		"h2=2",
++		"h3=3",
++		"h4=4",
++		"i1=" + realWorldByteChain(348),
++		"i2=" + realWorldByteChain(245),
++		"public_key=" + strings.Repeat("02", 32),
++		"endpoint=192.0.2.1:51820",
++		"allowed_ip=0.0.0.0/0",
++		"allowed_ip=::/0",
++		"persistent_keepalive_interval=1500",
++	}, "\n") + "\n"
++
++	if err := device.IpcSet(configuration); err != nil {
++		t.Fatalf("AmneziaWG device rejected real-world option sizes: %v", err)
++	}
++}
++
++func realWorldByteChain(byteCount int) string {
++	return "<b 0x" + strings.Repeat("ab", byteCount) + ">"
++}
