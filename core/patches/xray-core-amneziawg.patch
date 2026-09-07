@@ -556,7 +556,7 @@ new file mode 100644
 index 00000000..e04c613a
 --- /dev/null
 +++ b/infra/conf/wireguard_amnezia_runtime_test.go
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,59 @@
 +package conf_test
 +
 +import (
@@ -566,6 +566,7 @@ index 00000000..e04c613a
 +
 +	core "github.com/xtls/xray-core/core"
 +	conf "github.com/xtls/xray-core/infra/conf"
++	_ "github.com/xtls/xray-core/main/distro/all"
 +)
 +
 +func TestAmneziaWGRealWorldOutboundInitializes(t *testing.T) {
