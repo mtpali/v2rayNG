@@ -1,5 +1,6 @@
 package com.v2ray.ang.ui.main
 
+import com.v2ray.ang.R
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -22,10 +23,14 @@ class MainImportMenuTest {
     }
 
     @Test
-    fun drawerExposesSubscriptionProfileRenameAction() {
+    fun drawerExposesRenameConfigsAction() {
         assertEquals(
             listOf(MainDrawerAction.RenameSubscriptionProfiles),
             drawerActions,
+        )
+        assertEquals(
+            R.string.title_rename_configs,
+            MainDrawerAction.RenameSubscriptionProfiles.labelRes,
         )
     }
 

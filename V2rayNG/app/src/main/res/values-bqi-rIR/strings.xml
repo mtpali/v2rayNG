@@ -339,7 +339,7 @@
     <string name="title_update_subscription_no_subscription">بؽ اشتراک</string>
     <string name="toast_server_not_found_in_group">سرور پسند وابیڌه من بونکۊ سکویی نجۊرست</string>
     <string name="title_locate_selected_config">کانفیگ پسند وابیڌه ن بجۊرین</string>
-    <string name="title_rename_subscription_profiles">دگرگونی نوم کانفیگ یل اشتراک</string>
+    <string name="title_rename_configs">دگرگونی نوم کانفیگ یل</string>
     <string name="hint_profile_name_prefix">پیشوند نوم کانفیگ</string>
     <string name="toast_select_subscription_group">اول یه گروه اشتراک پسند کنین</string>
     <string name="toast_profile_name_prefix_required">پیشوند نوم کانفیگ ن بنویسین</string>

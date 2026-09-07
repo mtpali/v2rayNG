@@ -138,7 +138,7 @@ fun MainScreen(
     }
     if (showRenameGroupDialog) {
         InputDialog(
-            title = stringResource(R.string.title_rename_subscription_profiles),
+            title = stringResource(R.string.title_rename_configs),
             fields = listOf(
                 InputField(
                     label = stringResource(R.string.hint_profile_name_prefix),
@@ -171,13 +171,17 @@ fun MainScreen(
             MainDrawerContent(
                 drawerState = drawerState,
                 onNavigate = { route ->
-                    scope.launch { drawerState.close() }
-                    onNavigate(route)
+                    scope.launch {
+                        drawerState.close()
+                        onNavigate(route)
+                    }
                 },
                 onAction = { action ->
-                    scope.launch { drawerState.close() }
-                    when (action) {
-                        MainDrawerAction.RenameSubscriptionProfiles -> showRenameGroupDialog = true
+                    scope.launch {
+                        drawerState.close()
+                        when (action) {
+                            MainDrawerAction.RenameSubscriptionProfiles -> showRenameGroupDialog = true
+                        }
                     }
                 },
             )

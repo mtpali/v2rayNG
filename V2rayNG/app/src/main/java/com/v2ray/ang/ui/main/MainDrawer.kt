@@ -35,7 +35,7 @@ enum class MainDestination(@DrawableRes val iconRes: Int, @StringRes val labelRe
 enum class MainDrawerAction(@DrawableRes val iconRes: Int, @StringRes val labelRes: Int) {
     RenameSubscriptionProfiles(
         R.drawable.ic_edit_24dp,
-        R.string.title_rename_subscription_profiles,
+        R.string.title_rename_configs,
     )
 }
 
@@ -76,6 +76,7 @@ fun MainDrawerContent(
                     icon = { Icon(painterResource(item.iconRes), contentDescription = null) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
+                AppDivider()
             }
             drawerActions.forEach { item ->
                 NavigationDrawerItem(
@@ -85,8 +86,8 @@ fun MainDrawerContent(
                     icon = { Icon(painterResource(item.iconRes), contentDescription = null) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
+                AppDivider()
             }
-            AppDivider()
             NavigationDrawerItem(
                 label = { Text(stringResource(MainDestination.BackupRestore.labelRes)) },
                 selected = false,

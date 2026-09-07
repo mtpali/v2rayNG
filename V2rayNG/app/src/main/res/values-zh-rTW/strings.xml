@@ -339,7 +339,7 @@
     <string name="title_update_subscription_no_subscription">無訂閱</string>
     <string name="toast_server_not_found_in_group">目前群組中找不到所選伺服器</string>
     <string name="title_locate_selected_config">尋找所選設定檔</string>
-    <string name="title_rename_subscription_profiles">重新命名訂閱設定檔</string>
+    <string name="title_rename_configs">重新命名設定</string>
     <string name="hint_profile_name_prefix">設定檔名稱前綴</string>
     <string name="toast_select_subscription_group">請先選擇訂閱群組</string>
     <string name="toast_profile_name_prefix_required">請輸入設定檔名稱前綴</string>

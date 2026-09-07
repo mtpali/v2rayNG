@@ -339,7 +339,7 @@
     <string name="title_update_subscription_no_subscription">هیچ اشتراکی وجود ندارد</string>
     <string name="toast_server_not_found_in_group">سرور انتخاب‌شده در گروه فعلی پیدا نشد</string>
     <string name="title_locate_selected_config">یافتن پیکربندی انتخاب‌شده</string>
-    <string name="title_rename_subscription_profiles">تغییر نام کانفیگ‌های اشتراک</string>
+    <string name="title_rename_configs">تغییر نام کانفیگ‌ها</string>
     <string name="hint_profile_name_prefix">پیشوند نام کانفیگ</string>
     <string name="toast_select_subscription_group">ابتدا یک گروه اشتراک را انتخاب کنید</string>
     <string name="toast_profile_name_prefix_required">پیشوند نام کانفیگ را وارد کنید</string>

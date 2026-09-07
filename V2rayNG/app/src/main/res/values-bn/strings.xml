@@ -339,7 +339,7 @@
     <string name="title_update_subscription_no_subscription">কোনো সাবস্ক্রিপশন নেই</string>
     <string name="toast_server_not_found_in_group">বর্তমান গ্রুপে নির্বাচিত সার্ভারটি পাওয়া যায়নি</string>
     <string name="title_locate_selected_config">নির্বাচিত কনফিগটি খুঁজুন</string>
-    <string name="title_rename_subscription_profiles">সাবস্ক্রিপশন প্রোফাইলের নাম বদলান</string>
+    <string name="title_rename_configs">কনফিগগুলোর নাম বদলান</string>
     <string name="hint_profile_name_prefix">প্রোফাইল নামের উপসর্গ</string>
     <string name="toast_select_subscription_group">প্রথমে একটি সাবস্ক্রিপশন গ্রুপ বেছে নিন</string>
     <string name="toast_profile_name_prefix_required">প্রোফাইল নামের উপসর্গ লিখুন</string>
