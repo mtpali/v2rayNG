@@ -463,10 +463,21 @@ index edad5545..7e8ed171 100644
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 diff --git a/proxy/wireguard/tun_linux.go b/proxy/wireguard/tun_linux.go
-index eb017547..cebc426c 100644
+index eb017547..e7a8a433 100644
 --- a/proxy/wireguard/tun_linux.go
 +++ b/proxy/wireguard/tun_linux.go
 @@ -16,0 +17 @@ import (
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 @@ -20 +20,0 @@ import (
 -	"golang.zx2c4.com/wireguard/tun"
+@@ -277,2 +277,5 @@ func KernelTunSupported() (bool, error) {
+-	var data unix.CapUserData
+-	if err := unix.Capget(&hdr, &data); err != nil {
++	// Linux capability ABI v3 writes two records, including on 32-bit Android.
++	// A single record lets capget overwrite adjacent stack memory during startup.
++	// Keep both records while using LINUX_CAPABILITY_VERSION_3 (capget(2)).
++	var data [2]unix.CapUserData
++	if err := unix.Capget(&hdr, &data[0]); err != nil {
+@@ -282 +285 @@ func KernelTunSupported() (bool, error) {
+-	return (data.Effective & (1 << unix.CAP_NET_ADMIN)) != 0, nil
++	return (data[0].Effective & (1 << unix.CAP_NET_ADMIN)) != 0, nil
