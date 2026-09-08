@@ -416,10 +416,10 @@ index 00000000..22d1a905
 +}
 diff --git a/proxy/wireguard/amnezia_handshake_test.go b/proxy/wireguard/amnezia_handshake_test.go
 new file mode 100644
-index 00000000..8de65ce2
+index 00000000..71bbd7ae
 --- /dev/null
 +++ b/proxy/wireguard/amnezia_handshake_test.go
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,131 @@
 +package wireguard
 +
 +import (
@@ -433,8 +433,8 @@ index 00000000..8de65ce2
 +	"time"
 +
 +	"github.com/amnezia-vpn/amneziawg-go/v3/device"
-+	"github.com/amnezia-vpn/amneziawg-go/v3/tun/tuntest"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun/tuntest"
 +	"golang.org/x/crypto/curve25519"
 +)
 +
@@ -443,7 +443,7 @@ index 00000000..8de65ce2
 +type amneziaReadBarrier struct {
 +	tun.Device
 +	started chan struct{}
-+	once sync.Once
++	once    sync.Once
 +}
 +
 +func (b *amneziaReadBarrier) Read(bufs [][]byte, sizes []int, offset int) (int, error) {
@@ -464,12 +464,16 @@ index 00000000..8de65ce2
 +			for i := range sockets {
 +				var err error
 +				sockets[i], err = net.ListenPacket("udp4", "127.0.0.1:0")
-+				if err != nil { t.Fatal(err) }
++				if err != nil {
++					t.Fatal(err)
++				}
 +				socket := sockets[i]
 +				t.Cleanup(func() { socket.Close() })
 +				private[i] = bytes.Repeat([]byte{byte(i + 1)}, 32)
 +				public[i], err = curve25519.X25519(private[i], curve25519.Basepoint)
-+				if err != nil { t.Fatal(err) }
++				if err != nil {
++					t.Fatal(err)
++				}
 +			}
 +			for i := range devices {
 +				tunnels[i] = tuntest.NewChannelTUN()
@@ -478,13 +482,16 @@ index 00000000..8de65ce2
 +				socket := sockets[i]
 +				binding := &bind{amnezia: true, listenFunc: func() (net.PacketConn, error) { return socket, nil }}
 +				reader := &amneziaReadBarrier{Device: tunnels[i].TUN(), started: make(chan struct{})}
-+				devices[i] = device.NewDevice(reader, binding, &device.Logger{Verbosef: t.Logf, Errorf: t.Logf})
++				// Crypto workers can finish logging after Device.Close returns;
++				// do not retain a testing.T callback beyond the subtest lifetime.
++				devices[i] = device.NewDevice(reader, binding, device.NewLogger(device.LogLevelError, "AmneziaWG test: "))
 +				dev := devices[i]
 +				t.Cleanup(dev.Close)
 +				binding.downFunc = dev.Down
 +				select {
 +				case <-reader.started:
-+				case <-time.After(10 * time.Second): t.Fatal("initial TUN read did not start")
++				case <-time.After(10 * time.Second):
++					t.Fatal("initial TUN read did not start")
 +				}
 +				options := []string{
 +					"private_key=" + hex.EncodeToString(private[i]),
@@ -516,21 +523,29 @@ index 00000000..8de65ce2
 +					"allowed_ip=" + ips[1-i].String() + "/32",
 +					"persistent_keepalive_interval=25-35",
 +				)
-+				if err := dev.IpcSet(strings.Join(options, "\n") + "\n"); err != nil { t.Fatal(err) }
++				if err := dev.IpcSet(strings.Join(options, "\n") + "\n"); err != nil {
++					t.Fatal(err)
++				}
 +			}
 +			for _, dev := range devices {
-+				if err := dev.Up(); err != nil { t.Fatal(err) }
++				if err := dev.Up(); err != nil {
++					t.Fatal(err)
++				}
 +			}
 +			for i := range devices {
 +				packet := tuntest.Ping(ips[1-i], ips[i])
 +				select {
 +				case tunnels[i].Outbound <- packet:
-+				case <-time.After(10 * time.Second): t.Fatal("TUN reader did not start")
++				case <-time.After(10 * time.Second):
++					t.Fatal("TUN reader did not start")
 +				}
 +				select {
 +				case received := <-tunnels[1-i].Inbound:
-+					if !bytes.Equal(packet, received) { t.Fatal("authenticated packet changed") }
-+				case <-time.After(10 * time.Second): t.Fatal("authenticated packet did not arrive")
++					if !bytes.Equal(packet, received) {
++						t.Fatal("authenticated packet changed")
++					}
++				case <-time.After(10 * time.Second):
++					t.Fatal("authenticated packet did not arrive")
 +				}
 +			}
 +		})
