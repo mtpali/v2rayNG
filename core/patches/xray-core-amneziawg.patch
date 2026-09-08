@@ -414,6 +414,103 @@ index 00000000..22d1a905
 +func realWorldByteChain(byteCount int) string {
 +	return "<b 0x" + strings.Repeat("ab", byteCount) + ">"
 +}
+diff --git a/proxy/wireguard/amnezia_handshake_test.go b/proxy/wireguard/amnezia_handshake_test.go
+new file mode 100644
+index 00000000..8e0b0edf
+--- /dev/null
++++ b/proxy/wireguard/amnezia_handshake_test.go
+@@ -0,0 +1,91 @@
++package wireguard
++
++import (
++	"bytes"
++	"encoding/hex"
++	"fmt"
++	"net"
++	"net/netip"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/amnezia-vpn/amneziawg-go/v3/device"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun/tuntest"
++	"golang.org/x/crypto/curve25519"
++)
++
++// Exercise a complete authenticated exchange through Xray's actual UDP bind.
++// Dummy peers use loopback sockets; no supplied keys or external server is used.
++func TestAmneziaWGProtectedHandshake(t *testing.T) {
++	for _, protected := range []bool{false, true} {
++		t.Run(fmt.Sprintf("protected=%v", protected), func(t *testing.T) {
++			var sockets [2]net.PacketConn
++			var tunnels [2]*tuntest.ChannelTUN
++			var devices [2]*device.Device
++			var private, public [2][]byte
++			ips := [2]netip.Addr{netip.MustParseAddr("100.75.120.5"), netip.MustParseAddr("100.64.0.1")}
++			for i := range sockets {
++				var err error
++				sockets[i], err = net.ListenPacket("udp4", "127.0.0.1:0")
++				if err != nil { t.Fatal(err) }
++				socket := sockets[i]
++				t.Cleanup(func() { socket.Close() })
++				private[i] = bytes.Repeat([]byte{byte(i + 1)}, 32)
++				public[i], err = curve25519.X25519(private[i], curve25519.Basepoint)
++				if err != nil { t.Fatal(err) }
++			}
++			for i := range devices {
++				tunnels[i] = tuntest.NewChannelTUN()
++				// Configure both peers before allowing either to initiate a handshake.
++				<-tunnels[i].TUN().Events()
++				socket := sockets[i]
++				binding := &bind{amnezia: true, listenFunc: func() (net.PacketConn, error) { return socket, nil }}
++				devices[i] = device.NewDevice(tunnels[i].TUN(), binding, device.NewLogger(device.LogLevelError, "loopback: "))
++				dev := devices[i]
++				t.Cleanup(dev.Close)
++				binding.downFunc = dev.Down
++				options := []string{
++					"private_key=" + hex.EncodeToString(private[i]),
++					"jc=7", "jmin=10", "jmax=80",
++					"h1=1", "h2=2", "h3=3", "h4=4",
++					"i1=<b 0x" + strings.Repeat("ab", 348) + ">",
++					"i2=<b 0x" + strings.Repeat("cd", 245) + ">",
++				}
++				if protected {
++					options = append(options,
++						"s1=1032", "s2=532", "s3=1036", "s4=12",
++						"header_protection_key=" + strings.Repeat("03", 32),
++						"content_padding_addition=10-100",
++						"rekey_after_time=100-120", "rekey_timeout=3-8",
++						"reject_after_time=150-180", "keepalive_timeout=7-13",
++						"max_handshake_attempts=15-20",
++					)
++				}
++				options = append(options,
++					"public_key=" + hex.EncodeToString(public[1-i]),
++					"preshared_key=" + strings.Repeat("04", 32),
++					"endpoint=" + sockets[1-i].LocalAddr().String(),
++					"allowed_ip=" + ips[1-i].String() + "/32",
++					"persistent_keepalive_interval=25-35",
++				)
++				if err := dev.IpcSet(strings.Join(options, "\n") + "\n"); err != nil { t.Fatal(err) }
++			}
++			for _, dev := range devices {
++				if err := dev.Up(); err != nil { t.Fatal(err) }
++			}
++			for i := range devices {
++				packet := tuntest.Ping(ips[1-i], ips[i])
++				select {
++				case tunnels[i].Outbound <- packet:
++				case <-time.After(10 * time.Second): t.Fatal("TUN reader did not start")
++				}
++				select {
++				case received := <-tunnels[1-i].Inbound:
++					if !bytes.Equal(packet, received) { t.Fatal("authenticated packet changed") }
++				case <-time.After(10 * time.Second): t.Fatal("authenticated packet did not arrive")
++				}
++			}
++		})
++	}
++}
 diff --git a/proxy/wireguard/amnezia_transport_test.go b/proxy/wireguard/amnezia_transport_test.go
 new file mode 100644
 index 00000000..9d4ff01a
