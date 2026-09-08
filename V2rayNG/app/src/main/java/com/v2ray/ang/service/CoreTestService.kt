@@ -13,14 +13,21 @@ import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MessageUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /** User-requested real-ping runs as a normal service, as in MobileTinaVPN. */
 class CoreTestService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Repeated START commands must await the same initialization, not skip an
+    // initialization still running on another worker thread.
+    private val coreReady = scope.async(start = CoroutineStart.LAZY) {
+        CoreNativeManager.initCoreEnv(this@CoreTestService)
+    }
     private val batches = RealPingBatchState()
     private var worker: RealPingWorkerService? = null
 
@@ -35,7 +42,7 @@ class CoreTestService : Service() {
         }
         scope.launch {
             try {
-                CoreNativeManager.initCoreEnv(this@CoreTestService)
+                coreReady.await()
                 val guids = when {
                     message.serverGuids.isNotEmpty() -> message.serverGuids
                     message.subscriptionId.isNotEmpty() -> MmkvManager.decodeServerList(message.subscriptionId)
