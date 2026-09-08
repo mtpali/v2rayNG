@@ -781,12 +781,10 @@ index 4491886a..c7cb9a18 100644
 +		h.tun = nil
 +		h.closed = true
 diff --git a/proxy/wireguard/config.pb.go b/proxy/wireguard/config.pb.go
-index 59db6564..af7e9cf6 100644
+index 59db6564..de62454f 100644
 --- a/proxy/wireguard/config.pb.go
 +++ b/proxy/wireguard/config.pb.go
-@@ -86,0 +87 @@ type PeerConfig struct {
-+	DnsServers []string `protobuf:"bytes,11,rep,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`
-@@ -167,2 +168,6 @@ type DeviceConfig struct {
+@@ -167,2 +167,6 @@ type DeviceConfig struct {
 -	unknownFields  protoimpl.UnknownFields
 -	sizeCache      protoimpl.SizeCache
 +	// Validated AmneziaWG device UAPI options. Empty retains standard
@@ -795,7 +793,7 @@ index 59db6564..af7e9cf6 100644
 +	DnsServers []string `protobuf:"bytes,11,rep,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`
 +	unknownFields protoimpl.UnknownFields
 +	sizeCache     protoimpl.SizeCache
-@@ -263,0 +269,14 @@ func (x *DeviceConfig) GetNoKernelTun() bool {
+@@ -263,0 +268,14 @@ func (x *DeviceConfig) GetNoKernelTun() bool {
 +func (x *DeviceConfig) GetAmneziaConfig() string {
 +	if x != nil {
 +		return x.AmneziaConfig
@@ -810,10 +808,10 @@ index 59db6564..af7e9cf6 100644
 +	return nil
 +}
 +
-@@ -278 +297 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
+@@ -278 +296 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
 -	"allowedIps\"\xdc\x03\n" +
 +	"allowedIps\"\xa4\x04\n" +
-@@ -289 +308,4 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
+@@ -289 +307,4 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
 -	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\"\\\n" +
 +	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\x12%\n" +
 +	"\x0eamnezia_config\x18\n" +
