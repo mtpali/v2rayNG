@@ -416,16 +416,15 @@ index 00000000..22d1a905
 +}
 diff --git a/proxy/wireguard/amnezia_handshake_test.go b/proxy/wireguard/amnezia_handshake_test.go
 new file mode 100644
-index 00000000..8e0b0edf
+index 00000000..707e8c58
 --- /dev/null
 +++ b/proxy/wireguard/amnezia_handshake_test.go
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,96 @@
 +package wireguard
 +
 +import (
 +	"bytes"
 +	"encoding/hex"
-+	"fmt"
 +	"net"
 +	"net/netip"
 +	"strings"
@@ -440,8 +439,8 @@ index 00000000..8e0b0edf
 +// Exercise a complete authenticated exchange through Xray's actual UDP bind.
 +// Dummy peers use loopback sockets; no supplied keys or external server is used.
 +func TestAmneziaWGProtectedHandshake(t *testing.T) {
-+	for _, protected := range []bool{false, true} {
-+		t.Run(fmt.Sprintf("protected=%v", protected), func(t *testing.T) {
++	for _, variant := range []string{"plain", "padding", "header", "content", "full"} {
++		t.Run(variant, func(t *testing.T) {
 +			var sockets [2]net.PacketConn
 +			var tunnels [2]*tuntest.ChannelTUN
 +			var devices [2]*device.Device
@@ -463,7 +462,7 @@ index 00000000..8e0b0edf
 +				<-tunnels[i].TUN().Events()
 +				socket := sockets[i]
 +				binding := &bind{amnezia: true, listenFunc: func() (net.PacketConn, error) { return socket, nil }}
-+				devices[i] = device.NewDevice(tunnels[i].TUN(), binding, device.NewLogger(device.LogLevelError, "loopback: "))
++				devices[i] = device.NewDevice(tunnels[i].TUN(), binding, &device.Logger{Verbosef: t.Logf, Errorf: t.Logf})
 +				dev := devices[i]
 +				t.Cleanup(dev.Close)
 +				binding.downFunc = dev.Down
@@ -474,11 +473,17 @@ index 00000000..8e0b0edf
 +					"i1=<b 0x" + strings.Repeat("ab", 348) + ">",
 +					"i2=<b 0x" + strings.Repeat("cd", 245) + ">",
 +				}
-+				if protected {
++				if variant != "plain" {
++					options = append(options, "s1=1032", "s2=532", "s3=1036", "s4=12")
++				}
++				if variant == "header" || variant == "content" || variant == "full" {
++					options = append(options, "header_protection_key=" + strings.Repeat("03", 32))
++				}
++				if variant == "content" || variant == "full" {
++					options = append(options, "content_padding_addition=10-100")
++				}
++				if variant == "full" {
 +					options = append(options,
-+						"s1=1032", "s2=532", "s3=1036", "s4=12",
-+						"header_protection_key=" + strings.Repeat("03", 32),
-+						"content_padding_addition=10-100",
 +						"rekey_after_time=100-120", "rekey_timeout=3-8",
 +						"reject_after_time=150-180", "keepalive_timeout=7-13",
 +						"max_handshake_attempts=15-20",
