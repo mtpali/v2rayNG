@@ -76,13 +76,14 @@ jobs:
           cache-dependency-path: |
             AndroidLibXrayLite/go.sum
             core/patches/xray-core-amneziawg.patch
+            core/patches/amneziawg-go-s4.patch
 
       - name: Restore AmneziaWG libv2ray cache
         id: awg-core-cache
         uses: actions/cache/restore@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-226-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-226-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/amneziawg-go-s4.patch', 'scripts/build-amnezia-libv2ray.sh') }}
 
       - name: Install ARMv7 userspace test emulator
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
@@ -106,7 +107,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-226-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-226-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/amneziawg-go-s4.patch', 'scripts/build-amnezia-libv2ray.sh') }}
 
       - name: Test and build F-Droid ARMv7 APK
         working-directory: V2rayNG

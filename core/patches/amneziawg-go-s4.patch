@@ -1,0 +1,29 @@
+diff --git a/device/send.go b/device/send.go
+index 2b0a475..2935eb5 100644
+--- a/device/send.go
++++ b/device/send.go
+@@ -333,13 +333,22 @@ func (device *Device) RoutineReadFromTUN() {
+ 
+ 		// read packets
+ 		count, readErr = device.tun.device.Read(bufs, sizes, offset)
++		// NewDevice starts the reader before IpcSet supplies S4. Read may
++		// block across that update, so move the payload to the current wire
++		// offset before staging it. Otherwise the first packet uses stale S4
++		// and the remote peer cannot recognize its transport header.
++		padding = device.paddings.transport.Load()
++		packetOffset := MessageTransportHeaderSize + int(padding)
+ 		for i := 0; i < count; i++ {
+-			if sizes[i] < 1 {
++			if sizes[i] < 1 || packetOffset+sizes[i]+MessageTransportSize > len(bufs[i]) {
+ 				continue
+ 			}
++			if packetOffset != offset {
++				copy(bufs[i][packetOffset:packetOffset+sizes[i]], bufs[i][offset:offset+sizes[i]])
++			}
+ 
+ 			elem := elems[i]
+-			elem.packet = bufs[i][offset : offset+sizes[i]]
++			elem.packet = bufs[i][packetOffset : packetOffset+sizes[i]]
+ 			elem.padding = padding
+ 
+ 			// lookup peer

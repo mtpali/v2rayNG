@@ -416,10 +416,10 @@ index 00000000..22d1a905
 +}
 diff --git a/proxy/wireguard/amnezia_handshake_test.go b/proxy/wireguard/amnezia_handshake_test.go
 new file mode 100644
-index 00000000..707e8c58
+index 00000000..8de65ce2
 --- /dev/null
 +++ b/proxy/wireguard/amnezia_handshake_test.go
-@@ -0,0 +1,96 @@
+@@ -0,0 +1,116 @@
 +package wireguard
 +
 +import (
@@ -428,13 +428,28 @@ index 00000000..707e8c58
 +	"net"
 +	"net/netip"
 +	"strings"
++	"sync"
 +	"testing"
 +	"time"
 +
 +	"github.com/amnezia-vpn/amneziawg-go/v3/device"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun/tuntest"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 +	"golang.org/x/crypto/curve25519"
 +)
++
++// Signal the first blocking Read so the test deterministically applies S4
++// after the reader captured its initial offset, as can happen at app startup.
++type amneziaReadBarrier struct {
++	tun.Device
++	started chan struct{}
++	once sync.Once
++}
++
++func (b *amneziaReadBarrier) Read(bufs [][]byte, sizes []int, offset int) (int, error) {
++	b.once.Do(func() { close(b.started) })
++	return b.Device.Read(bufs, sizes, offset)
++}
 +
 +// Exercise a complete authenticated exchange through Xray's actual UDP bind.
 +// Dummy peers use loopback sockets; no supplied keys or external server is used.
@@ -462,10 +477,15 @@ index 00000000..707e8c58
 +				<-tunnels[i].TUN().Events()
 +				socket := sockets[i]
 +				binding := &bind{amnezia: true, listenFunc: func() (net.PacketConn, error) { return socket, nil }}
-+				devices[i] = device.NewDevice(tunnels[i].TUN(), binding, &device.Logger{Verbosef: t.Logf, Errorf: t.Logf})
++				reader := &amneziaReadBarrier{Device: tunnels[i].TUN(), started: make(chan struct{})}
++				devices[i] = device.NewDevice(reader, binding, &device.Logger{Verbosef: t.Logf, Errorf: t.Logf})
 +				dev := devices[i]
 +				t.Cleanup(dev.Close)
 +				binding.downFunc = dev.Down
++				select {
++				case <-reader.started:
++				case <-time.After(10 * time.Second): t.Fatal("initial TUN read did not start")
++				}
 +				options := []string{
 +					"private_key=" + hex.EncodeToString(private[i]),
 +					"jc=7", "jmin=10", "jmax=80",
