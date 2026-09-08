@@ -84,6 +84,12 @@ jobs:
           path: V2rayNG/app/libs/libv2ray.aar
           key: awg-226-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
 
+      - name: Install ARMv7 userspace test emulator
+        if: steps.awg-core-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user
+
       - name: Build libv2ray with AmneziaWG v3
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
         run: |
@@ -93,7 +99,7 @@ jobs:
           go install "golang.org/x/mobile/cmd/gomobile@$MOBILE_VERSION"
           export PATH="$(go env GOPATH)/bin:$PATH"
           gomobile init
-          bash scripts/build-amnezia-libv2ray.sh V2rayNG/app/libs/libv2ray.aar
+          AWG_TEST_ARMV7=1 bash scripts/build-amnezia-libv2ray.sh V2rayNG/app/libs/libv2ray.aar
 
       - name: Save AmneziaWG libv2ray cache
         if: steps.awg-core-cache.outputs.cache-hit != 'true'

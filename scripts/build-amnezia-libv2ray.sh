@@ -44,6 +44,18 @@ patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
     cd "$patched_core"
     GOWORK=off go test ./infra/conf -run 'TestAmneziaWG' -count=1
     GOWORK=off go test ./proxy/wireguard -count=1
+
+    # Exercise actual 32-bit ARM machine code; amd64 tests cannot detect ARM-only
+    # startup failures. This checks Linux userspace, not Android VPN integration.
+    if [[ "${AWG_TEST_ARMV7:-0}" == "1" ]]; then
+        command -v qemu-arm >/dev/null
+        GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
+            go test -c ./infra/conf -o "$task_dir/conf-armv7.test"
+        qemu-arm "$task_dir/conf-armv7.test" -test.run TestAmneziaWG -test.v -test.timeout 90s
+        GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
+            go test -c ./proxy/wireguard -o "$task_dir/wireguard-armv7.test"
+        qemu-arm "$task_dir/wireguard-armv7.test" -test.run TestAmneziaWG -test.v -test.timeout 90s
+    fi
 )
 
 (
