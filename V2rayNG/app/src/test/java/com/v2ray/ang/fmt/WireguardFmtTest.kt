@@ -159,4 +159,20 @@ class WireguardFmtTest {
         assertEquals("<b 0x0102>", profile.awgI1)
         assertNull(profile.reserved)
     }
+
+    @Test
+    fun preservesProtectedAmneziaKeepaliveRangeThroughStorageAndExport() {
+        val raw = amneziaConfig.replace("PersistentKeepalive = 25", "PersistentKeepalive = 25-35")
+        val profile = WireguardFmt.parseWireguardConfFile(raw)
+        assertEquals("25-35", profile.awgKeepAliveRange)
+        assertNull(profile.keepAlive)
+        val gson = com.google.gson.Gson()
+        val restored = gson.fromJson(gson.toJson(profile), com.v2ray.ang.dto.entities.ProfileItem::class.java)
+        assertEquals("25-35", restored.awgKeepAliveRange)
+        val imported = WireguardFmt.parseWireguardConfFile(WireguardFmt.toConf(restored))
+        assertEquals("25-35", imported.awgKeepAliveRange)
+        val legacy = gson.fromJson("{\"keepAlive\":25}", com.v2ray.ang.dto.entities.ProfileItem::class.java)
+        assertEquals(25, legacy.keepAlive)
+        assertNull(legacy.awgKeepAliveRange)
+    }
 }

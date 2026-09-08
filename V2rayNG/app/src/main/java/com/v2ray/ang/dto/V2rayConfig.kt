@@ -165,6 +165,7 @@ data class V2rayConfig(
                 var preSharedKey: String? = null,
                 var endpoint: String = "",
                 var keepAlive: Int? = null,
+                var keepAliveRange: String? = null,
                 var allowedIPs: List<String>? = null,
             )
         }

@@ -4,141 +4,97 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import com.v2ray.ang.AppConfig
-import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreNativeManager
 import com.v2ray.ang.dto.RealPingEvent
 import com.v2ray.ang.dto.TestServiceMessage
-import com.v2ray.ang.enums.NotificationChannelType
 import com.v2ray.ang.extension.serializable
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MessageUtil
-import com.v2ray.ang.util.NotificationHelper
-import java.util.Collections
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
+/** User-requested real-ping runs as a normal service, as in MobileTinaVPN. */
 class CoreTestService : Service() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val batches = RealPingBatchState()
+    private var worker: RealPingWorkerService? = null
 
-    // manage active batch workers so each batch is independent and cancellable
-    private val activeWorkers = Collections.synchronizedList(mutableListOf<RealPingWorkerService>())
+    override fun onBind(intent: Intent?): IBinder? = null
 
-    /**
-     * Initializes the V2Ray environment.
-     */
-    override fun onCreate() {
-        super.onCreate()
-        CoreNativeManager.initCoreEnv(this)
-    }
-
-    /**
-     * Binds the service.
-     * @param intent The intent.
-     * @return The binder.
-     */
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
-
-    /**
-     * Cleans up resources when the service is destroyed.
-     */
-    override fun onDestroy() {
-        LogUtil.i(AppConfig.TAG, "CoreTestService is being destroyed, cancelling ${activeWorkers.size} active workers")
-        // cancel any active workers
-        val snapshot = ArrayList(activeWorkers)
-        snapshot.forEach { it.cancel() }
-        activeWorkers.clear()
-        NotificationHelper.stopForeground(this)
-        super.onDestroy()
-    }
-
-    /**
-     * Handles the start command for the service.
-     * @param intent The intent.
-     * @param flags The flags.
-     * @param startId The start ID.
-     * @return The start mode.
-     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val message = intent?.serializable<TestServiceMessage>("content")
-        if (message == null) {
+        val token = invalidateBatch()
+        if (message?.key != AppConfig.MSG_MEASURE_CONFIG_START) {
             stopSelf(startId)
             return START_NOT_STICKY
         }
-
-        when (message.key) {
-            AppConfig.MSG_MEASURE_CONFIG_START -> handleMeasureStart(message, startId)
-            AppConfig.MSG_MEASURE_CONFIG_CANCEL -> handleMeasureCancel()
-            else -> {
-                NotificationHelper.stopForeground(this); stopSelf(startId)
+        scope.launch {
+            try {
+                CoreNativeManager.initCoreEnv(this@CoreTestService)
+                val guids = when {
+                    message.serverGuids.isNotEmpty() -> message.serverGuids
+                    message.subscriptionId.isNotEmpty() -> MmkvManager.decodeServerList(message.subscriptionId)
+                    else -> MmkvManager.decodeAllServerList()
+                }
+                synchronized(this@CoreTestService) {
+                    if (!batches.accepts(token)) return@synchronized
+                    if (guids.isEmpty()) {
+                        stopSelf(startId)
+                    } else {
+                        worker = RealPingWorkerService(this@CoreTestService, guids) { event ->
+                            handleEvent(token, startId, event)
+                        }.also { it.start() }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "Real-ping setup failed: group=${message.subscriptionId}", e)
+                synchronized(this@CoreTestService) {
+                    if (batches.accepts(token)) stopSelf(startId)
+                }
             }
         }
         return START_NOT_STICKY
     }
 
-    private fun handleMeasureStart(message: TestServiceMessage, startId: Int) {
-        LogUtil.i(AppConfig.TAG, "CoreTestService starting worker   subscription ${message.subscriptionId}")
-
-        NotificationHelper.startForeground(
-            this,
-            NotificationChannelType.CORE_TEST,
-            getString(R.string.app_name),
-            getString(R.string.title_real_ping_all_server)
-        )
-
-        val guidsList = when {
-            message.serverGuids.isNotEmpty() -> message.serverGuids
-            message.subscriptionId.isNotEmpty() -> MmkvManager.decodeServerList(message.subscriptionId)
-            else -> MmkvManager.decodeAllServerList()
-        }
-
-        if (guidsList.isNotEmpty()) {
-            lateinit var worker: RealPingWorkerService
-            worker = RealPingWorkerService(
-                context = this,
-                guids = guidsList,
-                onEvent = { event -> handleWorkerEvent(event) { activeWorkers.remove(worker) } }
-            )
-            activeWorkers.add(worker)
-            worker.start()
-        } else {
-            NotificationHelper.stopForeground(this)
-            stopSelf(startId)
-        }
+    @Synchronized
+    private fun invalidateBatch(): Long {
+        val token = batches.next()
+        worker?.cancel()
+        worker = null
+        return token
     }
 
-    private fun handleWorkerEvent(event: RealPingEvent, onWorkerDone: () -> Unit) {
+    @Synchronized
+    private fun handleEvent(token: Long, startId: Int, event: RealPingEvent) {
+        // Native tests may return after cancellation; ignore their results and stop requests.
+        if (!batches.accepts(token)) return
         when (event) {
-            is RealPingEvent.Progress -> {
-                NotificationHelper.updateNotification(
-                    channelType = NotificationChannelType.CORE_TEST,
-                    context = this,
-                    content = getString(R.string.connection_runing_task_left, event.text)
-                )
+            is RealPingEvent.Progress ->
                 MessageUtil.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_NOTIFY, event.text)
-            }
-
             is RealPingEvent.Result -> {
                 MmkvManager.encodeServerTestDelayMillis(event.guid, event.delayMillis)
                 MessageUtil.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_SUCCESS, event.guid)
             }
-
             is RealPingEvent.Finish -> {
+                worker = null
                 MessageUtil.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_FINISH, event.status)
-                onWorkerDone()
-                if (activeWorkers.isEmpty()) {
-                    NotificationHelper.stopForeground(this)
-                    stopSelf()
-                }
+                stopSelf(startId)
             }
         }
     }
 
-    private fun handleMeasureCancel() {
-        LogUtil.i(AppConfig.TAG, "CoreTestService received cancel message, cancelling ${activeWorkers.size} active workers")
-        val snapshot = ArrayList(activeWorkers)
-        snapshot.forEach { it.cancel() }
-        activeWorkers.clear()
-        NotificationHelper.stopForeground(this)
-        stopSelf()
+    @Synchronized
+    override fun onDestroy() {
+        batches.close()
+        invalidateBatch()
+        scope.cancel()
+        super.onDestroy()
     }
 }

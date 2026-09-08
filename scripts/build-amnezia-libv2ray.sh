@@ -44,6 +44,8 @@ patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
     cd "$patched_core"
     GOWORK=off go test ./infra/conf -run 'TestAmneziaWG' -count=1
     GOWORK=off go test ./proxy/wireguard -count=1
+    # Stress teardown and packet delivery under the host race detector.
+    GOWORK=off go test -race ./proxy/wireguard -run TestAmneziaWG -count=10 -timeout=90s
 
     # Exercise actual 32-bit ARM machine code; amd64 tests cannot detect ARM-only
     # startup failures. This checks Linux userspace, not Android VPN integration.

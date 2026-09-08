@@ -277,6 +277,7 @@ object CoreOutboundBuilder {
                 peer.preSharedKey = profileItem.preSharedKey?.nullIfBlank()
                 peer.endpoint = Utils.getIpv6Address(profileItem.server) + ":${profileItem.serverPort}"
                 peer.keepAlive = profileItem.keepAlive?.takeIf { it > 0 }
+                peer.keepAliveRange = profileItem.awgKeepAliveRange?.takeIf { profileItem.isAmneziaWG && it.isNotBlank() }
                 peer.allowedIPs = profileItem.allowedIPs
                     ?.split(',', '\n')
                     ?.map { it.trim() }

@@ -122,6 +122,8 @@ object WireguardFmt : FmtBase() {
         config.reserved = peerParams["reserved"]?.nullIfBlank()
 
         config.isAmneziaWG = forceAmnezia || interfaceParams.keys.any(amneziaKeys::contains)
+        config.awgKeepAliveRange = peerParams["persistentkeepalive"]
+            ?.takeIf { config.isAmneziaWG && it.contains('-') }
         if (config.isAmneziaWG) {
             config.awgJc = interfaceParams.intValue("jc")
             config.awgJmin = interfaceParams.intValue("jmin")
@@ -258,7 +260,8 @@ object WireguardFmt : FmtBase() {
         config.allowedIPs?.takeIf { it.isNotBlank() }?.let {
             appendLine("AllowedIPs = ${it.replace('\n', ',')}")
         }
-        config.keepAlive?.takeIf { it > 0 }?.let {
+        (config.awgKeepAliveRange?.takeIf { config.isAmneziaWG }
+            ?: config.keepAlive?.takeIf { it > 0 }?.toString())?.let {
             appendLine("PersistentKeepalive = $it")
         }
         config.reserved?.takeIf { it.isNotBlank() && it != "0,0,0" }?.let {
