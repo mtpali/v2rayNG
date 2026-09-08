@@ -58,6 +58,7 @@ data class ProfileItem(
     var allowedIPs: String? = null,
     var keepAlive: Int? = null,
     var awgKeepAliveRange: String? = null,
+    var awgDns: String? = null,
 
     var isAmneziaWG: Boolean = false,
     var awgJc: Int = 0,
@@ -153,6 +154,7 @@ data class ProfileItem(
                 && this.allowedIPs == obj.allowedIPs
                 && this.keepAlive == obj.keepAlive
                 && this.awgKeepAliveRange == obj.awgKeepAliveRange
+                && this.awgDns == obj.awgDns
                 && this.isAmneziaWG == obj.isAmneziaWG
                 && this.awgJc == obj.awgJc
                 && this.awgJmin == obj.awgJmin

@@ -16,6 +16,7 @@ import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.dto.entities.ServersCache
 import com.v2ray.ang.extension.isComplexType
 import com.v2ray.ang.extension.nullIfBlank
+import com.v2ray.ang.extension.toTrafficString
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.helper.ItemTouchHelperAdapter
@@ -58,7 +59,9 @@ class MainRecyclerAdapter(
 
             //Name address
             holder.itemMainBinding.tvName.text = profile.remarks
-            holder.itemMainBinding.tvStatistics.text = getAddress(profile)
+            val consumed = mainViewModel.traffic.value[guid] ?: com.v2ray.ang.dto.entities.ProfileTraffic()
+            holder.itemMainBinding.tvStatistics.text = getAddress(profile) + "\n" +
+                context.getString(R.string.profile_traffic_usage, consumed.upload.toTrafficString(), consumed.download.toTrafficString())
             holder.itemMainBinding.tvType.text = getProtocolDescription(profile)
 
             //TestResult

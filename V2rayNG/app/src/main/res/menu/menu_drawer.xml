@@ -54,4 +54,8 @@
             android:title="@string/title_configuration_backup_restore" />
     </group>
 
+    <group android:id="@+id/group_lan_sharing" android:checkableBehavior="all">
+        <item android:id="@+id/lan_sharing" android:checkable="true"
+            android:icon="@drawable/ic_share_24dp" android:title="@string/title_root_lan_sharing" />
+    </group>
 </menu>

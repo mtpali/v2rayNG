@@ -90,7 +90,7 @@
                                 android:id="@+id/tv_statistics"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:lines="1"
+                                android:maxLines="2"
                                 android:textAppearance="@style/TextAppearance.AppCompat.Small" />
 
                         </LinearLayout>

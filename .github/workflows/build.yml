@@ -115,12 +115,12 @@ jobs:
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           chmod 755 gradlew
           ./gradlew :app:testFdroidDebugUnitTest :app:compileFdroidDebugKotlin \
-            :app:assembleFdroidDebug -PABI_FILTERS=armeabi-v7a
+            :app:assembleFdroidRelease -PABI_FILTERS=armeabi-v7a
 
       - name: Verify APK ABI and native libraries
         run: |
           set -euo pipefail
-          APK_PATH=$(find V2rayNG/app/build/outputs/apk/fdroid/debug \
+          APK_PATH=$(find V2rayNG/app/build/outputs/apk/fdroid/release \
             -type f -name '*armeabi-v7a*.apk' -print -quit)
           test -n "$APK_PATH"
           unzip -Z1 "$APK_PATH" | grep -q '^lib/armeabi-v7a/libgojni.so$'
@@ -139,6 +139,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: v2rayNG-2.2.6-fdroid-armeabi-v7a
-          path: V2rayNG/app/build/outputs/apk/fdroid/debug/*armeabi-v7a*.apk
+          path: V2rayNG/app/build/outputs/apk/fdroid/release/*armeabi-v7a*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload R8 mapping for crash diagnosis
+        uses: actions/upload-artifact@v7
+        with:
+          name: v2rayNG-r8-mapping
+          path: V2rayNG/app/build/outputs/mapping/fdroidRelease/mapping.txt
           if-no-files-found: error
           retention-days: 30

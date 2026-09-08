@@ -91,6 +91,7 @@ data class V2rayConfig(
             var reserved: List<Int>? = null,
             var mtu: Int? = null,
             var amnezia: AmneziaWGOptionsBean? = null,
+            var dnsServers: List<String>? = null,
             var obfsPassword: String? = null,
             var version: Int? = null,
         ) {

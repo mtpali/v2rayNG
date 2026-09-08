@@ -459,4 +459,7 @@
     <string name="toast_select_subscription_group">Hãy chọn một nhóm đăng ký trước</string>
     <string name="toast_profile_name_prefix_required">Nhập tiền tố tên hồ sơ</string>
     <string name="toast_profiles_renamed">Đã đổi tên %1$d hồ sơ</string>
+    <string name="title_clear_traffic">Clear traffic usage</string>
+    <string name="confirm_clear_traffic">Reset traffic usage for all profiles?</string>
+    <string name="profile_traffic_usage">↑ %1$s · ↓ %2$s</string>
 </resources>

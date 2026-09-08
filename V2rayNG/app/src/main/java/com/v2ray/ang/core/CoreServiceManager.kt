@@ -46,6 +46,8 @@ object CoreServiceManager {
     private val coreController: CoreController = CoreNativeManager.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
     private var currentConfig: ProfileItem? = null
+    private var trafficGuid: String? = null
+    private var trafficGeneration = "initial"
     private var processFinder: XrayProcessFinder? = null
     private var browserDialer: IDialerService? = null
 
@@ -253,6 +255,10 @@ object CoreServiceManager {
         ContextCompat.registerReceiver(service, mMsgReceive, mFilter, Utils.receiverFlags())
 
         currentConfig = config
+        synchronized(this) {
+            trafficGuid = guid
+            trafficGeneration = MmkvManager.readTraffic().generation
+        }
         var tunFd = vpnInterface?.fd ?: 0
         val dialerAddr = if (currentConfig?.browserDialerMode.isNullOrEmpty()) {
             ""
@@ -299,7 +305,14 @@ object CoreServiceManager {
         if (coreController.isRunning) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    coreController.stopLoop()
+                    synchronized(this@CoreServiceManager) {
+                        try {
+                            queryAllOutboundTrafficStats()
+                        } finally {
+                            trafficGuid = null
+                            coreController.stopLoop()
+                        }
+                    }
                 } catch (e: Exception) {
                     LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
                 }
@@ -329,7 +342,9 @@ object CoreServiceManager {
      * Queries and resets all outbound traffic counters in one core call.
      * Go side format: tag,direction,value;tag,direction,value;
      */
+    @Synchronized
     fun queryAllOutboundTrafficStats(): List<OutboundTrafficStat> {
+        if (!coreController.isRunning) return emptyList()
         val payload = coreController.queryAllOutboundTrafficStats()
 
         val result = ArrayList<OutboundTrafficStat>()
@@ -350,7 +365,21 @@ object CoreServiceManager {
                 )
             )
         }
-//        LogUtil.d(AppConfig.TAG, "Queried outbound traffic stats: $result")
+        trafficGuid?.let { guid ->
+            val generation = MmkvManager.readTraffic().generation
+            if (generation == trafficGeneration) {
+                // Count the logical primary outbound once, excluding direct traffic
+                // and proxy-chain hops to avoid counting the same bytes twice.
+                val up = result.filter { it.tag == AppConfig.TAG_PROXY && it.direction == AppConfig.UPLINK }.sumOf { it.value }
+                val down = result.filter { it.tag == AppConfig.TAG_PROXY && it.direction == AppConfig.DOWNLINK }.sumOf { it.value }
+                if ((up > 0 || down > 0) && MmkvManager.addTraffic(guid, generation, up, down)) {
+                    getService()?.let { MessageUtil.sendMsg2UI(it, AppConfig.MSG_TRAFFIC_UPDATED, guid) }
+                }
+            }
+            // After a reset discard the pending native sample, which can contain
+            // bytes from before the reset; never restore cleared consumption.
+            trafficGeneration = generation
+        }
         return result
     }
 

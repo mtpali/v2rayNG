@@ -70,6 +70,7 @@ object WireguardFmt : FmtBase() {
         val interfaceParams = linkedMapOf<String, String>()
         val peerParams = linkedMapOf<String, String>()
         val interfaceAddresses = mutableListOf<String>()
+        val interfaceDns = mutableListOf<String>()
         var currentSection: String? = null
 
         normalizedConfig.lines().forEach { line ->
@@ -89,6 +90,8 @@ object WireguardFmt : FmtBase() {
                                 val key = parts[0].lowercase()
                                 if (key == "address") {
                                     interfaceAddresses += parts[1]
+                                } else if (key == "dns") {
+                                    interfaceDns += parts[1]
                                 } else {
                                     interfaceParams[key] = parts[1]
                                 }
@@ -125,6 +128,7 @@ object WireguardFmt : FmtBase() {
         config.awgKeepAliveRange = peerParams["persistentkeepalive"]
             ?.takeIf { config.isAmneziaWG && it.contains('-') }
         if (config.isAmneziaWG) {
+            config.awgDns = interfaceDns.joinToString(", ").nullIfBlank()
             config.awgJc = interfaceParams.intValue("jc")
             config.awgJmin = interfaceParams.intValue("jmin")
             config.awgJmax = interfaceParams.intValue("jmax")
@@ -223,6 +227,7 @@ object WireguardFmt : FmtBase() {
         config.mtu?.let { appendLine("MTU = $it") }
 
         if (config.isAmneziaWG) {
+            appendValue("DNS", config.awgDns)
             appendInt("Jc", config.awgJc)
             appendInt("Jmin", config.awgJmin)
             appendInt("Jmax", config.awgJmax)

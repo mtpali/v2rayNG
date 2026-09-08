@@ -287,6 +287,11 @@ object CoreOutboundBuilder {
             wireguard.mtu = profileItem.mtu
             wireguard.reserved = profileItem.reserved?.takeIf { it.isNotBlank() }?.split(",")?.filter { it.isNotBlank() }?.map { it.trim().toInt() }
             if (profileItem.isAmneziaWG) {
+                wireguard.dnsServers = profileItem.awgDns?.split(',', '\n')
+                    ?.map { it.trim() }
+                    ?.filter { Utils.isPureIpAddress(it) }
+                    ?.distinct()
+                    ?.ifEmpty { null }
                 wireguard.amnezia = OutboundBean.OutSettingsBean.AmneziaWGOptionsBean(
                     jc = profileItem.awgJc,
                     jmin = profileItem.awgJmin,

@@ -175,4 +175,17 @@ class WireguardFmtTest {
         assertEquals(25, legacy.keepAlive)
         assertNull(legacy.awgKeepAliveRange)
     }
+    @Test
+    fun preservesProfileDnsAcrossImportStorageAndUri() {
+        val source = amneziaConfig.replace("MTU = 1380", "DNS = 100.64.0.1, 8.8.4.4\nDNS = 2001:db8::53\nMTU = 1380")
+        val profile = WireguardFmt.parseWireguardConfFile(source)
+        assertEquals("100.64.0.1, 8.8.4.4, 2001:db8::53", profile.awgDns)
+        val gson = com.google.gson.Gson()
+        val restored = gson.fromJson(gson.toJson(profile), com.v2ray.ang.dto.entities.ProfileItem::class.java)
+        val imported = requireNotNull(WireguardFmt.parseAmneziaWG(WireguardFmt.exportUri(restored)))
+        assertEquals(profile.awgDns, imported.awgDns)
+        val legacy = gson.fromJson("{\"keepAlive\":25}", com.v2ray.ang.dto.entities.ProfileItem::class.java)
+        assertNull(legacy.awgDns)
+    }
+
 }

@@ -48,7 +48,6 @@ class SettingsActivity : BaseActivity() {
 
         private val mode by lazy { findPreference<ListPreference>(AppConfig.PREF_MODE) }
         private val enableRootMode by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_ROOT_MODE_ENABLE) }
-        private val lanSharing by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_ROOT_LAN_SHARING) }
 
         private val hevTunLogLevel by lazy { findPreference<ListPreference>(AppConfig.PREF_HEV_TUNNEL_LOGLEVEL) }
         private val hevTunRwTimeout by lazy { findPreference<EditTextPreference>(AppConfig.PREF_HEV_TUNNEL_RW_TIMEOUT) }
@@ -134,18 +133,6 @@ class SettingsActivity : BaseActivity() {
                 }
             }
 
-            lanSharing?.setOnPreferenceChangeListener { _, newValue ->
-                if (newValue == true && !RootManager.cachedRoot()) {
-                    lifecycleScope.launch {
-                        if (checkAndRequestRoot()) {
-                            lanSharing?.isChecked = true
-                        }
-                    }
-                    false
-                } else {
-                    true
-                }
-            }
 
         }
 

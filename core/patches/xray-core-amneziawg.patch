@@ -31,14 +31,15 @@ index 92ccc6bb..8b7996e1 100644
 +golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446 h1:cqHQ3AycTHvM2R7ikgyX57D+XvtcSnGylsLkOVhta/w=
 +golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446/go.mod h1:rpwXGsirqLqN2L0JDJQlwOboGHmptD5ZD6T2VmcqhTw=
 diff --git a/infra/conf/wireguard.go b/infra/conf/wireguard.go
-index 8131be28..c3e017d3 100644
+index 8131be28..4c222949 100644
 --- a/infra/conf/wireguard.go
 +++ b/infra/conf/wireguard.go
-@@ -5,0 +6 @@ import (
+@@ -5,0 +6,2 @@ import (
 +	"fmt"
-@@ -8,0 +10 @@ import (
++	"net/netip"
+@@ -8,0 +11 @@ import (
 +	awgdevice "github.com/amnezia-vpn/amneziawg-go/v3/device"
-@@ -18,5 +20,6 @@ type WireGuardPeerConfig struct {
+@@ -18,5 +21,6 @@ type WireGuardPeerConfig struct {
 -	PublicKey    string   `json:"publicKey"`
 -	PreSharedKey string   `json:"preSharedKey"`
 -	Endpoint     string   `json:"endpoint"`
@@ -50,7 +51,7 @@ index 8131be28..c3e017d3 100644
 +	KeepAlive      uint32   `json:"keepAlive"`
 +	KeepAliveRange string   `json:"keepAliveRange,omitempty"`
 +	AllowedIPs     []string `json:"allowedIPs,omitempty"`
-@@ -49,0 +53,7 @@ func (c *WireGuardPeerConfig) Build() (*wireguard.PeerConfig, error) {
+@@ -49,0 +54,7 @@ func (c *WireGuardPeerConfig) Build() (*wireguard.PeerConfig, error) {
 +	if c.KeepAliveRange != "" {
 +		var interval awgdevice.UintRange
 +		if err := interval.FromString(c.KeepAliveRange); err != nil {
@@ -58,8 +59,9 @@ index 8131be28..c3e017d3 100644
 +		}
 +		config.KeepAlive = c.KeepAliveRange
 +	}
-@@ -68,0 +79,149 @@ type WireGuardConfig struct {
+@@ -68,0 +80,150 @@ type WireGuardConfig struct {
 +	Amnezia        *AmneziaWGConfig       `json:"amnezia,omitempty"`
++	DnsServers     []string               `json:"dnsServers,omitempty"`
 +}
 +
 +// AmneziaWGConfig contains the device-level options implemented by
@@ -208,7 +210,14 @@ index 8131be28..c3e017d3 100644
 +		request.WriteString("disable_cookies=true\n")
 +	}
 +	return request.String(), nil
-@@ -125,0 +285,4 @@ func (c *WireGuardConfig) Build() (proto.Message, error) {
+@@ -125,0 +287,11 @@ func (c *WireGuardConfig) Build() (proto.Message, error) {
++	for _, server := range c.DnsServers {
++		addr, err := netip.ParseAddr(server)
++		if err != nil || addr.Zone() != "" {
++			return nil, errors.New("WireGuard dnsServers must contain IP literals")
++		}
++		config.DnsServers = append(config.DnsServers, addr.String())
++	}
 +	config.AmneziaConfig, err = c.Amnezia.BuildIPC()
 +	if err != nil {
 +		return nil, err
@@ -279,15 +288,18 @@ index 00000000..a6047931
 +}
 diff --git a/infra/conf/wireguard_amnezia_test.go b/infra/conf/wireguard_amnezia_test.go
 new file mode 100644
-index 00000000..8713427f
+index 00000000..0e351b58
 --- /dev/null
 +++ b/infra/conf/wireguard_amnezia_test.go
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,85 @@
 +package conf
 +
 +import (
 +	"strings"
 +	"testing"
++ "reflect"
++ "github.com/xtls/xray-core/proxy/wireguard"
++ "google.golang.org/protobuf/proto"
 +)
 +
 +func TestAmneziaWGConfigBuildIPC(t *testing.T) {
@@ -351,6 +363,20 @@ index 00000000..8713427f
 + peer, err := (&WireGuardPeerConfig{KeepAlive:25}).Build()
 + if err != nil || peer.KeepAlive != "25" { t.Fatal("legacy numeric keepalive changed") }
 +}
++
++func TestAmneziaWGDNSProtoRoundTrip(t *testing.T) {
++ c := &WireGuardConfig{SecretKey: strings.Repeat("01",32), DnsServers: []string{"100.64.0.1", "8.8.4.4"}}
++ config, err := c.Build(); if err != nil { t.Fatal(err) }
++ data, err := proto.Marshal(config); if err != nil { t.Fatal(err) }
++ var restored wireguard.DeviceConfig
++ if err := proto.Unmarshal(data, &restored); err != nil { t.Fatal(err) }
++ if !reflect.DeepEqual(c.DnsServers, restored.DnsServers) { t.Fatal("profile DNS lost in protobuf bridge") }
++ c.DnsServers = []string{"invalid.example"}
++ if _, err := c.Build(); err == nil { t.Fatal("non-IP resolver accepted") }
++ c.DnsServers = nil
++ legacy, err := c.Build(); if err != nil { t.Fatal(err) }
++ if len(legacy.(*wireguard.DeviceConfig).DnsServers) != 0 { t.Fatal("legacy config gained DNS") }
++}
 diff --git a/proxy/wireguard/amnezia_device_test.go b/proxy/wireguard/amnezia_device_test.go
 new file mode 100644
 index 00000000..22d1a905
@@ -413,6 +439,28 @@ index 00000000..22d1a905
 +
 +func realWorldByteChain(byteCount int) string {
 +	return "<b 0x" + strings.Repeat("ab", byteCount) + ">"
++}
+diff --git a/proxy/wireguard/amnezia_dns_test.go b/proxy/wireguard/amnezia_dns_test.go
+new file mode 100644
+index 00000000..ad683e91
+--- /dev/null
++++ b/proxy/wireguard/amnezia_dns_test.go
+@@ -0,0 +1,16 @@
++package wireguard
++
++import (
++ "net/netip"
++ "testing"
++)
++
++func TestAmneziaWGProfileDNSReachesNetstack(t *testing.T) {
++ conf := &DeviceConfig{DnsServers: []string{"100.64.0.1", "8.8.4.4"}}
++ servers, err := clientDNSServers(conf); if err != nil { t.Fatal(err) }
++ dev, network, _, err := CreateNetTUN([]netip.Addr{netip.MustParseAddr("100.75.120.5")}, servers, 1280, true)
++ if err != nil { t.Fatal(err) }; defer dev.Close()
++ if len(network.dnsServers) != 2 || network.dnsServers[0].String() != "100.64.0.1" { t.Fatal("tunnel resolver ignored profile DNS") }
++ defaults, err := clientDNSServers(&DeviceConfig{}); if err != nil || defaults[0].String() != "1.1.1.1" { t.Fatal("legacy resolver changed") }
++ if _, err := clientDNSServers(&DeviceConfig{DnsServers: []string{"invalid"}}); err == nil { t.Fatal("invalid resolver accepted") }
 +}
 diff --git a/proxy/wireguard/amnezia_handshake_test.go b/proxy/wireguard/amnezia_handshake_test.go
 new file mode 100644
@@ -638,7 +686,7 @@ index 0e71e153..704eb279 100644
 -		if len(bufs[i]) > 3 && len(b.reserved) == 3 {
 +		if !b.amnezia && len(bufs[i]) > 3 && len(b.reserved) == 3 {
 diff --git a/proxy/wireguard/client.go b/proxy/wireguard/client.go
-index 4491886a..68a33e5b 100644
+index 4491886a..c7cb9a18 100644
 --- a/proxy/wireguard/client.go
 +++ b/proxy/wireguard/client.go
 @@ -12 +12 @@ import (
@@ -658,14 +706,43 @@ index 4491886a..68a33e5b 100644
 +	dev    *device.Device
 +	mu     sync.Mutex
 +	closed bool
-@@ -142,4 +143,2 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
+@@ -100,0 +102,4 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
++	dnsServers, err := clientDNSServers(conf)
++	if err != nil {
++		return nil, err
++	}
+@@ -109 +114 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+-		tun, tnet, err = createKernelTun(localAddresses, []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("1.0.0.1"), netip.MustParseAddr("2606:4700:4700::1111"), netip.MustParseAddr("2606:4700:4700::1001")}, int(conf.Mtu))
++		tun, tnet, err = createKernelTun(localAddresses, dnsServers, int(conf.Mtu))
+@@ -112 +117 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+-		tun, tnet, _, err = CreateNetTUN(localAddresses, []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("1.0.0.1"), netip.MustParseAddr("2606:4700:4700::1111"), netip.MustParseAddr("2606:4700:4700::1001")}, int(conf.Mtu), true)
++		tun, tnet, _, err = CreateNetTUN(localAddresses, dnsServers, int(conf.Mtu), true)
+@@ -131,0 +137,17 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
++// Keep profile resolvers inside the tunnel: remote domain lookup does not use
++// Xray's global DNS client. Empty preserves the historical WireGuard defaults.
++func clientDNSServers(conf *DeviceConfig) ([]netip.Addr, error) {
++	if len(conf.DnsServers) == 0 {
++		return []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("1.0.0.1"), netip.MustParseAddr("2606:4700:4700::1111"), netip.MustParseAddr("2606:4700:4700::1001")}, nil
++	}
++	servers := make([]netip.Addr, 0, len(conf.DnsServers))
++	for _, value := range conf.DnsServers {
++		addr, err := netip.ParseAddr(value)
++		if err != nil || addr.Zone() != "" {
++			return nil, errors.New("WireGuard DNS server is not an IP literal")
++		}
++		servers = append(servers, addr)
++	}
++	return servers, nil
++}
++
+@@ -142,4 +164,2 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 -	if h.dev == nil {
 -		if err := h.init(ctx); err != nil {
 -			return err
 -		}
 +	if err := h.init(ctx); err != nil {
 +		return err
-@@ -147,2 +146,8 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
+@@ -147,2 +167,8 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 -
 -	if err := h.dev.Up(); err != nil {
 +	h.mu.Lock()
@@ -676,46 +753,49 @@ index 4491886a..68a33e5b 100644
 +	err := h.dev.Up()
 +	h.mu.Unlock()
 +	if err != nil {
-@@ -246,0 +252,4 @@ func (h *Handler) Close() (err error) {
+@@ -246,0 +273,4 @@ func (h *Handler) Close() (err error) {
 +	if h.closed {
 +		return nil
 +	}
 +	h.closed = true
-@@ -260,0 +270,3 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -260,0 +291,3 @@ func (h *Handler) init(ctx context.Context) error {
 +	if h.closed {
 +		return gonet.ErrClosed
 +	}
-@@ -300 +312 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -300 +333 @@ func (h *Handler) init(ctx context.Context) error {
 -	bind := &bind{}
 +	bind := &bind{amnezia: h.conf.AmneziaConfig != ""}
-@@ -321,0 +334,6 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -321,0 +355,6 @@ func (h *Handler) init(ctx context.Context) error {
 +	if h.conf.AmneziaConfig != "" {
 +		cfg.WriteString(h.conf.AmneziaConfig)
 +		if !strings.HasSuffix(h.conf.AmneziaConfig, "\n") {
 +			cfg.WriteByte('\n')
 +		}
 +	}
-@@ -336,0 +355,3 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -336,0 +376,3 @@ func (h *Handler) init(ctx context.Context) error {
 +		dev.Close()
 +		h.tun = nil
 +		h.closed = true
-@@ -340,0 +362,3 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -340,0 +383,3 @@ func (h *Handler) init(ctx context.Context) error {
 +		dev.Close()
 +		h.tun = nil
 +		h.closed = true
 diff --git a/proxy/wireguard/config.pb.go b/proxy/wireguard/config.pb.go
-index 59db6564..ec92b5a7 100644
+index 59db6564..af7e9cf6 100644
 --- a/proxy/wireguard/config.pb.go
 +++ b/proxy/wireguard/config.pb.go
-@@ -167,2 +167,5 @@ type DeviceConfig struct {
+@@ -86,0 +87 @@ type PeerConfig struct {
++	DnsServers []string `protobuf:"bytes,11,rep,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`
+@@ -167,2 +168,6 @@ type DeviceConfig struct {
 -	unknownFields  protoimpl.UnknownFields
 -	sizeCache      protoimpl.SizeCache
 +	// Validated AmneziaWG device UAPI options. Empty retains standard
 +	// WireGuard-compatible behavior.
 +	AmneziaConfig string `protobuf:"bytes,10,opt,name=amnezia_config,json=amneziaConfig,proto3" json:"amnezia_config,omitempty"`
++	DnsServers []string `protobuf:"bytes,11,rep,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`
 +	unknownFields protoimpl.UnknownFields
 +	sizeCache     protoimpl.SizeCache
-@@ -263,0 +267,7 @@ func (x *DeviceConfig) GetNoKernelTun() bool {
+@@ -263,0 +269,14 @@ func (x *DeviceConfig) GetNoKernelTun() bool {
 +func (x *DeviceConfig) GetAmneziaConfig() string {
 +	if x != nil {
 +		return x.AmneziaConfig
@@ -723,24 +803,34 @@ index 59db6564..ec92b5a7 100644
 +	return ""
 +}
 +
-@@ -278 +288 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
++func (x *DeviceConfig) GetDnsServers() []string {
++	if x != nil {
++		return x.DnsServers
++	}
++	return nil
++}
++
+@@ -278 +297 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
 -	"allowedIps\"\xdc\x03\n" +
-+	"allowedIps\"\x83\x04\n" +
-@@ -289 +299,3 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
++	"allowedIps\"\xa4\x04\n" +
+@@ -289 +308,4 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
 -	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\"\\\n" +
 +	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\x12%\n" +
 +	"\x0eamnezia_config\x18\n" +
-+	" \x01(\tR\ramneziaConfig\"\\\n" +
++	" \x01(\tR\ramneziaConfig\x12\x1f\n" +
++	"\x0bdns_servers\x18\v \x03(\tR\ndnsServers\"\\\n" +
 diff --git a/proxy/wireguard/config.proto b/proxy/wireguard/config.proto
-index 171d5b21..366bf845 100644
+index 171d5b21..5c4a61e1 100644
 --- a/proxy/wireguard/config.proto
 +++ b/proxy/wireguard/config.proto
-@@ -37 +37,4 @@ message DeviceConfig {
+@@ -37 +37,6 @@ message DeviceConfig {
 -}
 \ No newline at end of file
 +  // Validated AmneziaWG device UAPI options. Empty retains standard
 +  // WireGuard-compatible behavior.
 +  string amnezia_config = 10;
++  // Tunnel DNS from the imported profile; empty retains legacy resolvers.
++  repeated string dns_servers = 11;
 +}
 diff --git a/proxy/wireguard/netstack.go b/proxy/wireguard/netstack.go
 index 22c42e3f..bf6c341c 100644

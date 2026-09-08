@@ -38,6 +38,67 @@ import java.util.Collections
 import java.util.regex.PatternSyntaxException
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+    private val trafficState = kotlinx.coroutines.flow.MutableStateFlow<Map<String, com.v2ray.ang.dto.entities.ProfileTraffic>>(emptyMap())
+    val traffic: kotlinx.coroutines.flow.StateFlow<Map<String, com.v2ray.ang.dto.entities.ProfileTraffic>> = trafficState
+    private val sharingState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val lanSharing: kotlinx.coroutines.flow.StateFlow<Boolean> = sharingState
+    private var sharingJob: kotlinx.coroutines.Job? = null
+
+    private var trafficRefreshJob: kotlinx.coroutines.Job? = null
+
+    fun refreshTraffic(guid: String? = null) {
+        trafficRefreshJob?.cancel()
+        trafficRefreshJob = viewModelScope.launch {
+            try {
+                val (profiles, sharing) = withContext(Dispatchers.IO) {
+                    MmkvManager.readTraffic().profiles.toMap() to
+                        MmkvManager.decodeSettingsBool(AppConfig.PREF_ROOT_LAN_SHARING)
+                }
+                trafficState.value = profiles
+                sharingState.value = sharing
+                updateListAction.value = guid?.let(::getPosition) ?: -1
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                LogUtil.e(AppConfig.TAG, "Failed to refresh profile traffic", e)
+            }
+        }
+    }
+
+    fun clearTraffic() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                MmkvManager.clearTraffic()
+                withContext(Dispatchers.Main) { refreshTraffic() }
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "Failed to clear profile traffic", e)
+                withContext(Dispatchers.Main) { getApplication<AngApplication>().toastError(R.string.toast_failure) }
+            }
+        }
+    }
+
+    fun toggleLanSharing() {
+        if (sharingJob?.isActive == true) return
+        sharingJob = viewModelScope.launch {
+            val enabled = !sharingState.value
+            if (enabled && !com.v2ray.ang.root.RootManager.refresh()) {
+                getApplication<AngApplication>().toastError(R.string.toast_root_required)
+                return@launch
+            }
+            val saved = withContext(Dispatchers.IO) {
+                MmkvManager.encodeSettings(AppConfig.PREF_ROOT_LAN_SHARING, enabled)
+            }
+            if (!saved) {
+                getApplication<AngApplication>().toastError(R.string.toast_failure)
+                return@launch
+            }
+            sharingState.value = enabled
+            // Use the same daemon restart command as the existing settings action.
+            if (isRunning.value == true) {
+                MessageUtil.sendMsg2Service(getApplication(), AppConfig.MSG_STATE_RESTART, "")
+            }
+        }
+    }
+
     private val subscriptionUpdateGate = SubscriptionUpdateGate()
     private var serverList = mutableListOf<String>() // MmkvManager.decodeServerList()
     var subscriptionId: String = MmkvManager.decodeSettingsString(AppConfig.CACHE_SUBSCRIPTION_ID, "").orEmpty()
@@ -482,10 +543,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     updateListAction.value = getPosition(content ?: "")
                 }
 
-                AppConfig.MSG_MEASURE_CONFIG_NOTIFY -> {
-                    val content = intent.getStringExtra("content")
-                    updateTestResultAction.value =
-                        getApplication<AngApplication>().getString(R.string.connection_runing_task_left, content)
+                AppConfig.MSG_TRAFFIC_UPDATED -> {
+                    refreshTraffic(intent.getStringExtra("content"))
                 }
 
                 AppConfig.MSG_MEASURE_CONFIG_FINISH -> {

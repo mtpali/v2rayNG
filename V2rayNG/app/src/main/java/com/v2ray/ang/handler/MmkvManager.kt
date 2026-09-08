@@ -17,6 +17,34 @@ import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 
 object MmkvManager {
+    private val trafficStorage by lazy { MMKV.mmkvWithID("PROFILE_TRAFFIC", MMKV.MULTI_PROCESS_MODE) }
+
+    fun readTraffic(): com.v2ray.ang.dto.entities.TrafficSnapshot =
+        trafficStorage.decodeString("snapshot")?.let {
+            JsonUtil.fromJsonSafe(it, com.v2ray.ang.dto.entities.TrafficSnapshot::class.java)
+        } ?: com.v2ray.ang.dto.entities.TrafficSnapshot()
+
+    fun addTraffic(guid: String, generation: String, up: Long, down: Long): Boolean {
+        trafficStorage.lock()
+        try {
+            val state = readTraffic()
+            if (state.generation != generation) return false
+            val previous = state.profiles[guid] ?: com.v2ray.ang.dto.entities.ProfileTraffic()
+            state.profiles[guid] = previous.add(up, down)
+            check(trafficStorage.encode("snapshot", JsonUtil.toJson(state)))
+            return true
+        } finally { trafficStorage.unlock() }
+    }
+
+    fun clearTraffic() {
+        trafficStorage.lock()
+        try {
+            // One atomic record prevents partial resets and stale sampler writes.
+            val empty = com.v2ray.ang.dto.entities.TrafficSnapshot(java.util.UUID.randomUUID().toString())
+            check(trafficStorage.encode("snapshot", JsonUtil.toJson(empty)))
+        } finally { trafficStorage.unlock() }
+    }
+
 
     //region private
 
