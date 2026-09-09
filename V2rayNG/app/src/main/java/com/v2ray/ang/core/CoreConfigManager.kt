@@ -170,7 +170,8 @@ object CoreConfigManager {
         configureDns(configContext, v2rayConfig, policyGroupBalancerTags)
         configureLocalDns(configContext, v2rayConfig)
         configureRootModeDns(v2rayConfig)
-        applyAmneziaProfileDns(v2rayConfig)
+        // Profile DNS belongs to the WireGuard netstack. Keep bootstrap DNS and
+        // routing intact: resolving a peer hostname through that same peer deadlocks.
 
         // (added by getDns / getCustomLocalDns) to use the balancer, then add
         // the catch-all balancer rule.
@@ -396,12 +397,8 @@ object CoreConfigManager {
     private fun postProcessForSpeedtest(v2rayConfig: V2rayConfig) {
         v2rayConfig.log.loglevel = MmkvManager.decodeSettingsString(AppConfig.PREF_LOGLEVEL) ?: "warning"
         v2rayConfig.inbounds.clear()
-        val profileDns = v2rayConfig.outbounds.firstOrNull()?.settings
-            ?.takeIf { it.amnezia != null }?.dnsServers
-        v2rayConfig.routing.rules.removeAll {
-            profileDns.isNullOrEmpty() || it.inboundTag != arrayListOf(AppConfig.TAG_DNS)
-        }
-        if (profileDns.isNullOrEmpty()) v2rayConfig.dns = null
+        v2rayConfig.routing.rules.clear()
+        v2rayConfig.dns = null
         v2rayConfig.fakedns = null
         v2rayConfig.stats = null
         v2rayConfig.policy = null
@@ -532,29 +529,6 @@ object CoreConfigManager {
             && MmkvManager.decodeSettingsBool(AppConfig.PREF_FAKE_DNS_ENABLED) == true
         ) {
             v2rayConfig.fakedns = listOf(V2rayConfig.FakednsBean())
-        }
-    }
-
-    internal fun applyAmneziaProfileDns(config: V2rayConfig) {
-        val outbound = config.outbounds.firstOrNull() ?: return
-        val settings = outbound.settings?.takeIf { it.amnezia != null } ?: return
-        val servers = settings.dnsServers?.takeIf { it.isNotEmpty() } ?: return
-        // A private resolver must precede geoip:private/direct rules. Also route
-        // raw app DNS through it when the optional local-DNS toggle is off.
-        config.dns = V2rayConfig.DnsBean(
-            servers = ArrayList<Any>(servers),
-            hosts = config.dns?.hosts,
-            tag = AppConfig.TAG_DNS,
-            enableParallelQuery = false,
-        )
-        config.routing.rules.add(0, V2rayConfig.RoutingBean.RulesBean(
-            inboundTag = arrayListOf(AppConfig.TAG_DNS), outboundTag = outbound.tag,
-        ))
-        config.routing.rules.add(0, V2rayConfig.RoutingBean.RulesBean(
-            inboundTag = arrayListOf("socks", "tun", "http"), port = "53", outboundTag = "dns-out",
-        ))
-        if (config.outbounds.none { it.tag == "dns-out" }) {
-            config.outbounds.add(V2rayConfig.OutboundBean(protocol = "dns", tag = "dns-out", mux = null))
         }
     }
 

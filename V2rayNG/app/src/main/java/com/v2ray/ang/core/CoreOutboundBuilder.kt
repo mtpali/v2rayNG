@@ -29,7 +29,8 @@ object CoreOutboundBuilder {
             EConfigType.SOCKS -> toOutboundSocks(profileItem)
             EConfigType.VLESS -> toOutboundVless(profileItem)
             EConfigType.TROJAN -> toOutboundTrojan(profileItem)
-            EConfigType.WIREGUARD -> toOutboundWireguard(profileItem)
+            EConfigType.WIREGUARD -> toOutboundWireguard(profileItem,
+                MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED))
             EConfigType.HYSTERIA2 -> toOutboundHysteria2(profileItem)
             EConfigType.HTTP -> toOutboundHttp(profileItem)
             else -> null
@@ -252,7 +253,7 @@ object CoreOutboundBuilder {
         return outboundBean
     }
 
-    private fun toOutboundWireguard(profileItem: ProfileItem): OutboundBean? {
+    internal fun toOutboundWireguard(profileItem: ProfileItem, ipv6Enabled: Boolean): OutboundBean? {
         val outboundBean = createInitOutbound(EConfigType.WIREGUARD)
 
         val rawAddresses = profileItem.localAddress
@@ -262,7 +263,7 @@ object CoreOutboundBuilder {
             ?.ifEmpty { null }
             ?: listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4)
 
-        val addresses = if (MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true) {
+        val addresses = if (ipv6Enabled) {
             rawAddresses
         } else {
             val ipv4Addresses = rawAddresses.filter { !it.contains(":") }

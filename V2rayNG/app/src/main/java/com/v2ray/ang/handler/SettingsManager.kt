@@ -17,7 +17,6 @@ import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.dto.entities.RulesetItem
 import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.enums.EConfigType
-import com.v2ray.ang.enums.Language
 import com.v2ray.ang.enums.RoutingType
 import com.v2ray.ang.enums.VpnInterfaceAddressConfig
 import com.v2ray.ang.handler.MmkvManager.decodeAllServerList
@@ -420,24 +419,9 @@ object SettingsManager {
      * Get the locale.
      * @return The locale.
      */
-    fun getLocale(): Locale {
-        val langCode =
-            MmkvManager.decodeSettingsString(AppConfig.PREF_LANGUAGE) ?: Language.AUTO.code
-        val language = Language.fromCode(langCode)
-
-        return when (language) {
-            Language.AUTO -> Utils.getSysLocale()
-            Language.ENGLISH -> Locale.ENGLISH
-            Language.CHINA -> Locale.CHINA
-            Language.TRADITIONAL_CHINESE -> Locale.TRADITIONAL_CHINESE
-            Language.VIETNAMESE -> Locale.forLanguageTag("vi")
-            Language.RUSSIAN -> Locale.forLanguageTag("ru")
-            Language.PERSIAN -> Locale.forLanguageTag("fa")
-            Language.ARABIC -> Locale.forLanguageTag("ar")
-            Language.BANGLA -> Locale.forLanguageTag("bn")
-            Language.BAKHTIARI -> Locale.forLanguageTag("bqi-IR")
-        }
-    }
+    // English-only distribution: old saved language choices must not restore RTL
+    // layout or select dependency translations after upgrading/restoring a backup.
+    fun getLocale(): Locale = Locale.ENGLISH
 
     /**
      * Set night mode.

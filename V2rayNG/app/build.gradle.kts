@@ -46,6 +46,10 @@ android {
         }
     }
 
+    androidResources {
+        localeFilters += listOf("en")
+    }
+
     flavorDimensions.add("distribution")
     productFlavors {
         create("fdroid") {

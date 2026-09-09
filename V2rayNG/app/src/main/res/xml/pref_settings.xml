@@ -28,13 +28,6 @@
             android:summary="@string/summary_pref_group_all_display"
             android:title="@string/title_pref_group_all_display" />
 
-        <ListPreference
-            android:defaultValue="auto"
-            android:entries="@array/language_select"
-            android:entryValues="@array/language_select_value"
-            android:key="pref_language"
-            android:summary="%s"
-            android:title="@string/title_language" />
 
         <ListPreference
             android:defaultValue="0"

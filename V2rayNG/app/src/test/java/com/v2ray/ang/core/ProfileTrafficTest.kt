@@ -7,6 +7,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProfileTrafficTest {
+    @Test fun unusedAndResetProfilesHaveNoVisibleUsage() {
+        assertFalse(ProfileTraffic().hasUsage())
+        assertFalse(ProfileTraffic(0, 0).hasUsage())
+        assertTrue(ProfileTraffic(1, 0).hasUsage())
+        assertTrue(ProfileTraffic(0, 1).hasUsage())
+        assertFalse(TrafficSnapshot("reset").profiles.containsKey("used-guid"))
+    }
+
     @Test fun accumulatesBothDirectionsAndIgnoresNegativeDeltas() {
         assertEquals(ProfileTraffic(12, 24), ProfileTraffic(5, 9).add(7, 15))
         assertEquals(ProfileTraffic(5, 9), ProfileTraffic(5, 9).add(-1, -2))

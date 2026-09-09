@@ -59,9 +59,13 @@ class MainRecyclerAdapter(
 
             //Name address
             holder.itemMainBinding.tvName.text = profile.remarks
-            val consumed = mainViewModel.traffic.value[guid] ?: com.v2ray.ang.dto.entities.ProfileTraffic()
-            holder.itemMainBinding.tvStatistics.text = getAddress(profile) + "\n" +
-                context.getString(R.string.profile_traffic_usage, consumed.upload.toTrafficString(), consumed.download.toTrafficString())
+            val consumed = mainViewModel.traffic.value[guid]
+            holder.itemMainBinding.tvStatistics.text = if (consumed?.hasUsage() == true) {
+                getAddress(profile) + "\n" + context.getString(R.string.profile_traffic_usage,
+                    consumed.upload.toTrafficString(), consumed.download.toTrafficString())
+            } else {
+                getAddress(profile)
+            }
             holder.itemMainBinding.tvType.text = getProtocolDescription(profile)
 
             //TestResult
