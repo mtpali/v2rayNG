@@ -37,6 +37,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.ProcessFinder
@@ -49,6 +50,8 @@ object CoreServiceManager {
     private val mMsgReceive = ReceiveMessageHandler()
     private var currentConfig: ProfileItem? = null
     private var stoppingScope: CoroutineScope? = null
+    private val stopGate = CoreStopGate()
+    @Volatile private var restartContext: Context? = null
     private var trafficGuid: String? = null
     private var trafficGeneration = "initial"
     private var processFinder: XrayProcessFinder? = null
@@ -217,6 +220,10 @@ object CoreServiceManager {
      * Starts the V2Ray core service.
      */
     fun startCoreLoop(vpnInterface: ParcelFileDescriptor?): Boolean {
+        if (stopGate.isStopping()) {
+            LogUtil.w(AppConfig.TAG, "StartCore-Manager: Previous core is still stopping")
+            return false
+        }
         if (coreController.isRunning) {
             LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
             return false
@@ -302,47 +309,60 @@ object CoreServiceManager {
      * Unregisters broadcast receivers, stops notifications, and shuts down plugins.
      * @return True if the core was stopped successfully, false otherwise.
      */
-    fun stopCoreLoop(): Boolean {
+    fun stopCoreLoop(onStopped: (() -> Unit)? = null): Boolean {
         val service = getService() ?: return false
+        if (!stopGate.begin(onStopped)) return true
 
-        if (coreController.isRunning && stoppingScope == null) {
-            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-            stoppingScope = scope
-            scope.launch {
-                try {
-                    synchronized(this@CoreServiceManager) {
-                        try {
-                            queryAllOutboundTrafficStats()
-                        } finally {
-                            trafficGuid = null
-                            coreController.stopLoop()
-                        }
-                    }
-                } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
-                } finally {
-                    stoppingScope = null
-                    scope.cancel()
-                }
-            }
-        }
-
-        // Close existing browser dialer
-        CoreNativeManager.reconcileBrowserDialer("")
-        if (browserDialer != null) {
-            browserDialer!!.stop()
-            browserDialer = null
-        }
-
-        MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+        // Stop sampling before releasing the core; only acknowledge stop after its
+        // sockets and tunnel have actually closed, never after an arbitrary delay.
         NotificationManager.cancelNotification()
-
         try {
             service.unregisterReceiver(mMsgReceive)
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
+            LogUtil.e(AppConfig.TAG, "StopCore-Manager: Failed to unregister receiver", e)
         }
-
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        stoppingScope = scope
+        scope.launch {
+            var stopped = false
+            try {
+                synchronized(this@CoreServiceManager) {
+                    try {
+                        queryAllOutboundTrafficStats()
+                    } finally {
+                        trafficGuid = null
+                        coreController.stopLoop()
+                    }
+                }
+                stopped = !coreController.isRunning
+                CoreNativeManager.reconcileBrowserDialer("")
+                browserDialer?.stop()
+                browserDialer = null
+                stopped = !coreController.isRunning
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "StopCore-Manager: Native shutdown failed", e)
+            } finally {
+                // The VPN owner closes its descriptor only after native shutdown.
+                // Keep the gate closed while owner cleanup runs.
+                do {
+                    stopGate.drain().forEach { callback ->
+                        try { callback() } catch (e: Exception) {
+                            LogUtil.e(AppConfig.TAG, "StopCore-Manager: Owner cleanup failed", e)
+                        }
+                    }
+                } while (stopped && !stopGate.finishIfDrained())
+                if (stopped) {
+                    MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+                    withContext(Dispatchers.Main) {
+                        val restart = restartContext
+                        restartContext = null
+                        if (restart != null) startVService(restart)
+                    }
+                }
+                stoppingScope = null
+                scope.cancel()
+            }
+        }
         return true
     }
 
@@ -552,15 +572,15 @@ object CoreServiceManager {
                 }
 
                 AppConfig.MSG_STATE_STOP -> {
+                    restartContext = null
                     LogUtil.i(AppConfig.TAG, "StartCore-Manager: Stop service")
                     serviceControl.stopService()
                 }
 
                 AppConfig.MSG_STATE_RESTART -> {
                     LogUtil.i(AppConfig.TAG, "StartCore-Manager: Restart service")
+                    restartContext = serviceControl.getService().applicationContext
                     serviceControl.stopService()
-                    Thread.sleep(500L)
-                    startVService(serviceControl.getService())
                 }
 
                 AppConfig.MSG_MEASURE_DELAY -> {
