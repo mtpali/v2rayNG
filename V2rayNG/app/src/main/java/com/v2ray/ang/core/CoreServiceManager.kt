@@ -33,6 +33,8 @@ import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MessageUtil
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import libv2ray.CoreCallbackHandler
@@ -46,6 +48,7 @@ object CoreServiceManager {
     private val coreController: CoreController = CoreNativeManager.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
     private var currentConfig: ProfileItem? = null
+    private var stoppingScope: CoroutineScope? = null
     private var trafficGuid: String? = null
     private var trafficGeneration = "initial"
     private var processFinder: XrayProcessFinder? = null
@@ -302,8 +305,10 @@ object CoreServiceManager {
     fun stopCoreLoop(): Boolean {
         val service = getService() ?: return false
 
-        if (coreController.isRunning) {
-            CoroutineScope(Dispatchers.IO).launch {
+        if (coreController.isRunning && stoppingScope == null) {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            stoppingScope = scope
+            scope.launch {
                 try {
                     synchronized(this@CoreServiceManager) {
                         try {
@@ -315,6 +320,9 @@ object CoreServiceManager {
                     }
                 } catch (e: Exception) {
                     LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
+                } finally {
+                    stoppingScope = null
+                    scope.cancel()
                 }
             }
         }

@@ -731,7 +731,12 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         when (item.itemId) {
             R.id.sub_setting -> requestActivityLauncher.launch(Intent(this, SubSettingActivity::class.java))
             R.id.rename_configs -> showRenameConfigsDialog()
-            R.id.lan_sharing -> mainViewModel.toggleLanSharing()
+            R.id.lan_sharing -> {
+                mainViewModel.toggleLanSharing()
+                // The persisted ViewModel state owns this toggle, including root denial.
+                // NavigationView otherwise marks a checkable action selected unconditionally.
+                return false
+            }
             R.id.per_app_proxy_settings -> requestActivityLauncher.launch(Intent(this, PerAppProxyActivity::class.java))
             R.id.routing_setting -> requestActivityLauncher.launch(Intent(this, RoutingSettingActivity::class.java))
             R.id.user_asset_setting -> requestActivityLauncher.launch(Intent(this, UserAssetActivity::class.java))

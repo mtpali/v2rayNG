@@ -193,7 +193,7 @@ object CoreConfigManager {
         }
 
         applyObservability(v2rayConfig, balancerStrategies)
-        applySpeedDisabled(v2rayConfig)
+        enableTrafficCounters(v2rayConfig)
         resolveOutboundDomainsToHosts(v2rayConfig)
 
         return v2rayConfig
@@ -692,9 +692,9 @@ object CoreConfigManager {
     }
 
     /**
-     * Remove speed-test runtime sections when the feature is disabled.
+     * Enable runtime counters regardless of notification speed visibility.
      */
-    private fun applySpeedDisabled(v2rayConfig: V2rayConfig) {
+    private fun enableTrafficCounters(v2rayConfig: V2rayConfig) {
         // Traffic accounting is independent of whether notification speed is visible.
         v2rayConfig.stats = v2rayConfig.stats ?: emptyMap<String, Any>()
         val policy = v2rayConfig.policy ?: V2rayConfig.PolicyBean(levels = emptyMap())
