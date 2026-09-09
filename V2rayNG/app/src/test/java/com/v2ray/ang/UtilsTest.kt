@@ -59,4 +59,25 @@ class UtilsTest {
         assertFalse(Utils.isIpInCidr("192.168.1.1", "invalid-cidr"))
     }
 
+    @Test
+    fun bracketedEndpointsDoNotChangePureAddressValidation() {
+        assertTrue(Utils.isIpAddress("[::1]:443"))
+        assertFalse(Utils.isPureIpAddress("[::1]:443"))
+        assertFalse(Utils.isIpAddress("[::1]:65536"))
+        assertFalse(Utils.isIpAddress("[::1]:invalid"))
+        assertFalse(Utils.isIpAddress("[::1]garbage"))
+        assertFalse(Utils.isIpAddress("[::1"))
+    }
+
+    @Test
+    fun cidrBoundsAndInvalidInputsDoNotRequireDnsOrAndroidLogging() {
+        assertTrue(Utils.isIpInCidr("203.0.113.1", "0.0.0.0/0"))
+        assertTrue(Utils.isIpInCidr("203.0.113.1", "203.0.113.1/32"))
+        assertFalse(Utils.isIpInCidr("203.0.113.2", "203.0.113.1/32"))
+        assertFalse(Utils.isIpInCidr("203.0.113.1", "203.0.113.0/33"))
+        assertFalse(Utils.isIpInCidr("203.0.113.1", "203.0.113.0/-1"))
+        assertFalse(Utils.isIpInCidr("203.0.113.1", "example.invalid/24"))
+        assertFalse(Utils.isIpInCidr("::1", "::/0"))
+    }
+
 }

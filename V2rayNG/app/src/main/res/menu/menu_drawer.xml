@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:showIn="navigation_view">
+
+    <!-- NavigationView draws a divider between consecutive groups. Keeping each action
+         in its own group gives every drawer button a clear visual separator. -->
+    <group android:id="@+id/group_subscriptions">
+        <item
+            android:id="@+id/sub_setting"
+            android:icon="@drawable/ic_subscriptions_24dp"
+            android:title="@string/title_sub_setting" />
+    </group>
+
+    <group android:id="@+id/group_rename_configs">
+        <item
+            android:id="@+id/rename_configs"
+            android:icon="@drawable/ic_edit_24dp"
+            android:title="@string/title_rename_configs" />
+    </group>
+
+    <group android:id="@+id/group_per_app">
+        <item
+            android:id="@+id/per_app_proxy_settings"
+            android:icon="@drawable/ic_per_apps_24dp"
+            android:title="@string/per_app_proxy_settings" />
+    </group>
+
+    <group android:id="@+id/group_routing">
+        <item
+            android:id="@+id/routing_setting"
+            android:icon="@drawable/ic_routing_24dp"
+            android:title="@string/routing_settings_title" />
+    </group>
+
+    <group android:id="@+id/group_assets">
+        <item
+            android:id="@+id/user_asset_setting"
+            android:icon="@drawable/ic_file_24dp"
+            android:title="@string/title_user_asset_setting" />
+    </group>
+
+    <group android:id="@+id/group_settings">
+        <item
+            android:id="@+id/settings"
+            android:icon="@drawable/ic_settings_24dp"
+            android:title="@string/title_settings" />
+    </group>
+
+    <group android:id="@+id/group_backup">
+        <item
+            android:id="@+id/backup_restore"
+            android:icon="@drawable/ic_restore_24dp"
+            android:title="@string/title_configuration_backup_restore" />
+    </group>
+
+    <group android:id="@+id/group_lan_sharing" android:checkableBehavior="all">
+        <item android:id="@+id/lan_sharing" android:checkable="true"
+            android:icon="@drawable/ic_share_24dp" android:title="@string/title_root_lan_sharing" />
+    </group>
+</menu>

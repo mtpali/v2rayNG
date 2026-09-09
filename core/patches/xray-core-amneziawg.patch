@@ -1,0 +1,923 @@
+diff --git a/go.mod b/go.mod
+index d5af7f40..b75280f4 100644
+--- a/go.mod
++++ b/go.mod
+@@ -5,0 +6 @@ require (
++	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828
+@@ -32 +33 @@ require (
+-	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb
++	golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446
+@@ -44 +45 @@ require (
+-	github.com/google/btree v1.1.2 // indirect
++	github.com/google/btree v1.1.3 // indirect
+diff --git a/go.sum b/go.sum
+index 92ccc6bb..8b7996e1 100644
+--- a/go.sum
++++ b/go.sum
+@@ -0,0 +1,2 @@
++github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828 h1:D8d8gGvwXcTxUIsE4z6F6vjy4/VZddu95vMNtOygh1c=
++github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828/go.mod h1:YoPc6qcOZqD7TXZ1xpedD8Sx3aSKsxN05ZqEFmXDNHk=
+@@ -22,2 +24,2 @@ github.com/golang/protobuf v1.5.4/go.mod h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6
+-github.com/google/btree v1.1.2 h1:xf4v41cLI2Z6FxbKm+8Bu+m8ifhj15JuZ9sa0jZCMUU=
+-github.com/google/btree v1.1.2/go.mod h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4=
++github.com/google/btree v1.1.3 h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg=
++github.com/google/btree v1.1.3/go.mod h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4=
+@@ -94,0 +97,2 @@ go.opentelemetry.io/otel/trace v1.43.0/go.mod h1:/QJhyVBUUswCphDVxq+8mld+AvhXZLh
++go.uber.org/atomic v1.11.0 h1:ZvwS0R+56ePWxUNi+Atn9dWONBPp/AUETXlHW0DxSjE=
++go.uber.org/atomic v1.11.0/go.mod h1:LUxbIzbOniOlMKjJjyPfpl4v+PKK2cNJn91OQbhoJI0=
+@@ -144,2 +148,2 @@ golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2/go.mod h1:deeaetjYA+D
+-golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb h1:whnFRlWMcXI9d+ZbWg+4sHnLp52d5yiIPUxMBSt4X9A=
+-golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb/go.mod h1:rpwXGsirqLqN2L0JDJQlwOboGHmptD5ZD6T2VmcqhTw=
++golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446 h1:cqHQ3AycTHvM2R7ikgyX57D+XvtcSnGylsLkOVhta/w=
++golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446/go.mod h1:rpwXGsirqLqN2L0JDJQlwOboGHmptD5ZD6T2VmcqhTw=
+diff --git a/infra/conf/wireguard.go b/infra/conf/wireguard.go
+index 8131be28..4c222949 100644
+--- a/infra/conf/wireguard.go
++++ b/infra/conf/wireguard.go
+@@ -5,0 +6,2 @@ import (
++	"fmt"
++	"net/netip"
+@@ -8,0 +11 @@ import (
++	awgdevice "github.com/amnezia-vpn/amneziawg-go/v3/device"
+@@ -18,5 +21,6 @@ type WireGuardPeerConfig struct {
+-	PublicKey    string   `json:"publicKey"`
+-	PreSharedKey string   `json:"preSharedKey"`
+-	Endpoint     string   `json:"endpoint"`
+-	KeepAlive    uint32   `json:"keepAlive"`
+-	AllowedIPs   []string `json:"allowedIPs,omitempty"`
++	PublicKey      string   `json:"publicKey"`
++	PreSharedKey   string   `json:"preSharedKey"`
++	Endpoint       string   `json:"endpoint"`
++	KeepAlive      uint32   `json:"keepAlive"`
++	KeepAliveRange string   `json:"keepAliveRange,omitempty"`
++	AllowedIPs     []string `json:"allowedIPs,omitempty"`
+@@ -49,0 +54,7 @@ func (c *WireGuardPeerConfig) Build() (*wireguard.PeerConfig, error) {
++	if c.KeepAliveRange != "" {
++		var interval awgdevice.UintRange
++		if err := interval.FromString(c.KeepAliveRange); err != nil {
++			return nil, errors.New("invalid keepAliveRange").Base(err)
++		}
++		config.KeepAlive = c.KeepAliveRange
++	}
+@@ -68,0 +80,150 @@ type WireGuardConfig struct {
++	Amnezia        *AmneziaWGConfig       `json:"amnezia,omitempty"`
++	DnsServers     []string               `json:"dnsServers,omitempty"`
++}
++
++// AmneziaWGConfig contains the device-level options implemented by
++// amneziawg-go. String values preserve AWG 3 range syntax (for example,
++// "30-45") until they are passed to the device UAPI.
++type AmneziaWGConfig struct {
++	Jc                      uint32 `json:"jc,omitempty"`
++	Jmin                    uint32 `json:"jmin,omitempty"`
++	Jmax                    uint32 `json:"jmax,omitempty"`
++	S1                      uint32 `json:"s1,omitempty"`
++	S2                      uint32 `json:"s2,omitempty"`
++	S3                      uint32 `json:"s3,omitempty"`
++	S4                      uint32 `json:"s4,omitempty"`
++	H1                      string `json:"h1,omitempty"`
++	H2                      string `json:"h2,omitempty"`
++	H3                      string `json:"h3,omitempty"`
++	H4                      string `json:"h4,omitempty"`
++	I1                      string `json:"i1,omitempty"`
++	I2                      string `json:"i2,omitempty"`
++	I3                      string `json:"i3,omitempty"`
++	I4                      string `json:"i4,omitempty"`
++	I5                      string `json:"i5,omitempty"`
++	HeaderProtectionKey     string `json:"headerProtectionKey,omitempty"`
++	ContentPaddingAddition  string `json:"contentPaddingAddition,omitempty"`
++	RekeyAfterTime          string `json:"rekeyAfterTime,omitempty"`
++	RekeyTimeout            string `json:"rekeyTimeout,omitempty"`
++	RejectAfterTime         string `json:"rejectAfterTime,omitempty"`
++	KeepaliveTimeout        string `json:"keepaliveTimeout,omitempty"`
++	MaxHandshakeAttempts    string `json:"maxHandshakeAttempts,omitempty"`
++	RandomizePacketTrailers bool   `json:"randomizePacketTrailers,omitempty"`
++	DisableCookieReplies    bool   `json:"disableCookieReplies,omitempty"`
++}
++
++func validateAmneziaRange(name, value string) error {
++	if value == "" {
++		return nil
++	}
++	var parsed awgdevice.UintRange
++	if err := parsed.FromString(value); err != nil {
++		return errors.New("invalid AmneziaWG ", name, ": ", value).Base(err)
++	}
++	return nil
++}
++
++func validateAmneziaChain(name, value string) error {
++	if strings.ContainsAny(value, "\r\n") {
++		return errors.New("invalid newline in AmneziaWG ", name)
++	}
++	return nil
++}
++
++func parseAmneziaKey(key string) (string, error) {
++	if key == "" {
++		return "", nil
++	}
++	if decoded, err := hex.DecodeString(key); err == nil && len(decoded) == 32 {
++		return strings.ToLower(key), nil
++	}
++	decoded, err := base64.StdEncoding.DecodeString(key)
++	if err != nil || len(decoded) != 32 {
++		return "", errors.New("invalid AmneziaWG header protection key")
++	}
++	return hex.EncodeToString(decoded), nil
++}
++
++func (c *AmneziaWGConfig) BuildIPC() (string, error) {
++	if c == nil {
++		return "", nil
++	}
++	if c.Jmax != 0 && c.Jmin > c.Jmax {
++		return "", errors.New("AmneziaWG jmin must not be greater than jmax")
++	}
++	for name, value := range map[string]uint32{
++		"s1": c.S1, "s2": c.S2, "s3": c.S3, "s4": c.S4,
++	} {
++		if value > 1<<16-1 {
++			return "", errors.New("AmneziaWG ", name, " must not exceed 65535")
++		}
++	}
++	for name, value := range map[string]string{
++		"h1": c.H1, "h2": c.H2, "h3": c.H3, "h4": c.H4,
++		"contentPaddingAddition": c.ContentPaddingAddition,
++		"rekeyAfterTime":         c.RekeyAfterTime,
++		"rekeyTimeout":           c.RekeyTimeout,
++		"rejectAfterTime":        c.RejectAfterTime,
++		"keepaliveTimeout":       c.KeepaliveTimeout,
++		"maxHandshakeAttempts":   c.MaxHandshakeAttempts,
++	} {
++		if err := validateAmneziaRange(name, value); err != nil {
++			return "", err
++		}
++	}
++	for name, value := range map[string]string{
++		"i1": c.I1, "i2": c.I2, "i3": c.I3, "i4": c.I4, "i5": c.I5,
++	} {
++		if err := validateAmneziaChain(name, value); err != nil {
++			return "", err
++		}
++	}
++	headerKey, err := parseAmneziaKey(c.HeaderProtectionKey)
++	if err != nil {
++		return "", err
++	}
++	if headerKey != "" && (c.S1 < 12 || c.S2 < 12 || c.S3 < 12 || c.S4 < 12) {
++		return "", errors.New("AmneziaWG header protection requires s1-s4 to be at least 12")
++	}
++
++	var request strings.Builder
++	writeUint := func(name string, value uint32) {
++		if value != 0 {
++			fmt.Fprintf(&request, "%s=%d\n", name, value)
++		}
++	}
++	writeString := func(name, value string) {
++		if value != "" {
++			fmt.Fprintf(&request, "%s=%s\n", name, value)
++		}
++	}
++	writeUint("jc", c.Jc)
++	writeUint("jmin", c.Jmin)
++	writeUint("jmax", c.Jmax)
++	writeUint("s1", c.S1)
++	writeUint("s2", c.S2)
++	writeUint("s3", c.S3)
++	writeUint("s4", c.S4)
++	writeString("h1", c.H1)
++	writeString("h2", c.H2)
++	writeString("h3", c.H3)
++	writeString("h4", c.H4)
++	writeString("i1", c.I1)
++	writeString("i2", c.I2)
++	writeString("i3", c.I3)
++	writeString("i4", c.I4)
++	writeString("i5", c.I5)
++	writeString("header_protection_key", headerKey)
++	writeString("content_padding_addition", c.ContentPaddingAddition)
++	writeString("rekey_after_time", c.RekeyAfterTime)
++	writeString("rekey_timeout", c.RekeyTimeout)
++	writeString("reject_after_time", c.RejectAfterTime)
++	writeString("keepalive_timeout", c.KeepaliveTimeout)
++	writeString("max_handshake_attempts", c.MaxHandshakeAttempts)
++	if c.RandomizePacketTrailers {
++		request.WriteString("random_trailers=true\n")
++	}
++	if c.DisableCookieReplies {
++		request.WriteString("disable_cookies=true\n")
++	}
++	return request.String(), nil
+@@ -125,0 +287,11 @@ func (c *WireGuardConfig) Build() (proto.Message, error) {
++	for _, server := range c.DnsServers {
++		addr, err := netip.ParseAddr(server)
++		if err != nil || addr.Zone() != "" {
++			return nil, errors.New("WireGuard dnsServers must contain IP literals")
++		}
++		config.DnsServers = append(config.DnsServers, addr.String())
++	}
++	config.AmneziaConfig, err = c.Amnezia.BuildIPC()
++	if err != nil {
++		return nil, err
++	}
+diff --git a/infra/conf/wireguard_amnezia_runtime_test.go b/infra/conf/wireguard_amnezia_runtime_test.go
+new file mode 100644
+index 00000000..a6047931
+--- /dev/null
++++ b/infra/conf/wireguard_amnezia_runtime_test.go
+@@ -0,0 +1,58 @@
++package conf_test
++
++import (
++	"encoding/json"
++	"strings"
++	"testing"
++
++	core "github.com/xtls/xray-core/core"
++	conf "github.com/xtls/xray-core/infra/conf"
++	_ "github.com/xtls/xray-core/main/distro/all"
++)
++
++func TestAmneziaWGRealWorldOutboundInitializes(t *testing.T) {
++	settings, err := json.Marshal(map[string]any{
++		"secretKey":      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
++		"address":        []string{"10.187.192.50/30"},
++		"mtu":            1280,
++		"domainStrategy": "ForceIPv4",
++		"peers": []map[string]any{{
++			"publicKey":  "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
++			"endpoint":   "192.0.2.1:51820",
++			"keepAlive":  1500,
++			"allowedIPs": []string{"0.0.0.0/0", "::/0"},
++		}},
++		"amnezia": map[string]any{
++			"jc": 4, "jmin": 40, "jmax": 70,
++			"h1": "1", "h2": "2", "h3": "3", "h4": "4",
++			"i1": byteChain(348),
++			"i2": byteChain(245),
++		},
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	raw := json.RawMessage(settings)
++	built, err := (&conf.Config{
++		OutboundConfigs: []conf.OutboundDetourConfig{{
++			Protocol: "wireguard",
++			Tag:      "proxy",
++			Settings: &raw,
++		}},
++	}).Build()
++	if err != nil {
++		t.Fatalf("failed to build real-world AmneziaWG config: %v", err)
++	}
++
++	instance, err := core.New(built)
++	if err != nil {
++		t.Fatalf("failed to initialize real-world AmneziaWG outbound: %v", err)
++	}
++	if err := instance.Close(); err != nil {
++		t.Fatalf("failed to close test instance: %v", err)
++	}
++}
++
++func byteChain(byteCount int) string {
++	return "<b 0x" + strings.Repeat("ab", byteCount) + ">"
++}
+diff --git a/infra/conf/wireguard_amnezia_test.go b/infra/conf/wireguard_amnezia_test.go
+new file mode 100644
+index 00000000..0e351b58
+--- /dev/null
++++ b/infra/conf/wireguard_amnezia_test.go
+@@ -0,0 +1,85 @@
++package conf
++
++import (
++	"strings"
++	"testing"
++ "reflect"
++ "github.com/xtls/xray-core/proxy/wireguard"
++ "google.golang.org/protobuf/proto"
++)
++
++func TestAmneziaWGConfigBuildIPC(t *testing.T) {
++	config := &AmneziaWGConfig{
++		Jc:                      5,
++		Jmin:                    20,
++		Jmax:                    40,
++		S1:                      64,
++		S2:                      80,
++		S3:                      96,
++		S4:                      112,
++		H1:                      "100-110",
++		I1:                      "<b 0x0102><r 8>",
++		ContentPaddingAddition:  "4-12",
++		RekeyAfterTime:          "90-120",
++		RandomizePacketTrailers: true,
++		DisableCookieReplies:    true,
++	}
++
++	ipc, err := config.BuildIPC()
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, expected := range []string{
++		"jc=5\n",
++		"jmin=20\n",
++		"jmax=40\n",
++		"s4=112\n",
++		"h1=100-110\n",
++		"i1=<b 0x0102><r 8>\n",
++		"content_padding_addition=4-12\n",
++		"rekey_after_time=90-120\n",
++		"random_trailers=true\n",
++		"disable_cookies=true\n",
++	} {
++		if !strings.Contains(ipc, expected) {
++			t.Fatalf("missing %q in %q", expected, ipc)
++		}
++	}
++}
++
++func TestAmneziaWGConfigRejectsInvalidRanges(t *testing.T) {
++	for _, config := range []*AmneziaWGConfig{
++		{Jmin: 40, Jmax: 20},
++		{H1: "40-20"},
++		{S1: 65536},
++	} {
++		if _, err := config.BuildIPC(); err == nil {
++			t.Fatalf("expected invalid config to fail: %+v", config)
++		}
++	}
++}
++
++func TestAmneziaWGKeepaliveRange(t *testing.T) {
++ for _, value := range []string{"25-35", "25"} {
++  peer, err := (&WireGuardPeerConfig{KeepAliveRange: value}).Build()
++  if err != nil { t.Fatal(err) }
++  if peer.KeepAlive != value { t.Fatalf("keepalive lost: %q", peer.KeepAlive) }
++ }
++ if _, err := (&WireGuardPeerConfig{KeepAliveRange:"35-25"}).Build(); err == nil { t.Fatal("reversed range accepted") }
++ peer, err := (&WireGuardPeerConfig{KeepAlive:25}).Build()
++ if err != nil || peer.KeepAlive != "25" { t.Fatal("legacy numeric keepalive changed") }
++}
++
++func TestAmneziaWGDNSProtoRoundTrip(t *testing.T) {
++ c := &WireGuardConfig{SecretKey: strings.Repeat("01",32), DnsServers: []string{"100.64.0.1", "8.8.4.4"}}
++ config, err := c.Build(); if err != nil { t.Fatal(err) }
++ data, err := proto.Marshal(config); if err != nil { t.Fatal(err) }
++ var restored wireguard.DeviceConfig
++ if err := proto.Unmarshal(data, &restored); err != nil { t.Fatal(err) }
++ if !reflect.DeepEqual(c.DnsServers, restored.DnsServers) { t.Fatal("profile DNS lost in protobuf bridge") }
++ c.DnsServers = []string{"invalid.example"}
++ if _, err := c.Build(); err == nil { t.Fatal("non-IP resolver accepted") }
++ c.DnsServers = nil
++ legacy, err := c.Build(); if err != nil { t.Fatal(err) }
++ if len(legacy.(*wireguard.DeviceConfig).DnsServers) != 0 { t.Fatal("legacy config gained DNS") }
++}
+diff --git a/proxy/wireguard/amnezia_device_test.go b/proxy/wireguard/amnezia_device_test.go
+new file mode 100644
+index 00000000..22d1a905
+--- /dev/null
++++ b/proxy/wireguard/amnezia_device_test.go
+@@ -0,0 +1,57 @@
++package wireguard
++
++import (
++	"strings"
++	"testing"
++
++	awgconn "github.com/amnezia-vpn/amneziawg-go/v3/conn"
++	awgdevice "github.com/amnezia-vpn/amneziawg-go/v3/device"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun/tuntest"
++)
++
++func TestAmneziaWGDeviceAcceptsRealWorldLongInitPackets(t *testing.T) {
++	tunDevice := tuntest.NewChannelTUN()
++	device := awgdevice.NewDevice(
++		tunDevice.TUN(),
++		awgconn.NewDefaultBind(),
++		awgdevice.NewLogger(awgdevice.LogLevelError, ""),
++	)
++	defer device.Close()
++
++	configuration := strings.Join([]string{
++		"private_key=" + strings.Repeat("01", 32),
++		"jc=4",
++		"jmin=40",
++		"jmax=70",
++		"h1=1",
++		"h2=2",
++		"h3=3",
++		"h4=4",
++		"s1=1032",
++		"s2=532",
++		"s3=1036",
++		"s4=12",
++		"header_protection_key=" + strings.Repeat("03", 32),
++		"content_padding_addition=10-100",
++		"rekey_after_time=100-120",
++		"rekey_timeout=3-8",
++		"reject_after_time=150-180",
++		"keepalive_timeout=7-13",
++		"max_handshake_attempts=15-20",
++		"i1=" + realWorldByteChain(348),
++		"i2=" + realWorldByteChain(245),
++		"public_key=" + strings.Repeat("02", 32),
++		"endpoint=192.0.2.1:51820",
++		"allowed_ip=0.0.0.0/0",
++		"allowed_ip=::/0",
++		"persistent_keepalive_interval=25-35",
++	}, "\n") + "\n"
++
++	if err := device.IpcSet(configuration); err != nil {
++		t.Fatalf("AmneziaWG device rejected real-world option sizes: %v", err)
++	}
++}
++
++func realWorldByteChain(byteCount int) string {
++	return "<b 0x" + strings.Repeat("ab", byteCount) + ">"
++}
+diff --git a/proxy/wireguard/amnezia_dns_test.go b/proxy/wireguard/amnezia_dns_test.go
+new file mode 100644
+index 00000000..ad683e91
+--- /dev/null
++++ b/proxy/wireguard/amnezia_dns_test.go
+@@ -0,0 +1,16 @@
++package wireguard
++
++import (
++ "net/netip"
++ "testing"
++)
++
++func TestAmneziaWGProfileDNSReachesNetstack(t *testing.T) {
++ conf := &DeviceConfig{DnsServers: []string{"100.64.0.1", "8.8.4.4"}}
++ servers, err := clientDNSServers(conf); if err != nil { t.Fatal(err) }
++ dev, network, _, err := CreateNetTUN([]netip.Addr{netip.MustParseAddr("100.75.120.5")}, servers, 1280, true)
++ if err != nil { t.Fatal(err) }; defer dev.Close()
++ if len(network.dnsServers) != 2 || network.dnsServers[0].String() != "100.64.0.1" { t.Fatal("tunnel resolver ignored profile DNS") }
++ defaults, err := clientDNSServers(&DeviceConfig{}); if err != nil || defaults[0].String() != "1.1.1.1" { t.Fatal("legacy resolver changed") }
++ if _, err := clientDNSServers(&DeviceConfig{DnsServers: []string{"invalid"}}); err == nil { t.Fatal("invalid resolver accepted") }
++}
+diff --git a/proxy/wireguard/amnezia_handshake_test.go b/proxy/wireguard/amnezia_handshake_test.go
+new file mode 100644
+index 00000000..71bbd7ae
+--- /dev/null
++++ b/proxy/wireguard/amnezia_handshake_test.go
+@@ -0,0 +1,131 @@
++package wireguard
++
++import (
++	"bytes"
++	"encoding/hex"
++	"net"
++	"net/netip"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/amnezia-vpn/amneziawg-go/v3/device"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun/tuntest"
++	"golang.org/x/crypto/curve25519"
++)
++
++// Signal the first blocking Read so the test deterministically applies S4
++// after the reader captured its initial offset, as can happen at app startup.
++type amneziaReadBarrier struct {
++	tun.Device
++	started chan struct{}
++	once    sync.Once
++}
++
++func (b *amneziaReadBarrier) Read(bufs [][]byte, sizes []int, offset int) (int, error) {
++	b.once.Do(func() { close(b.started) })
++	return b.Device.Read(bufs, sizes, offset)
++}
++
++// Exercise a complete authenticated exchange through Xray's actual UDP bind.
++// Dummy peers use loopback sockets; no supplied keys or external server is used.
++func TestAmneziaWGProtectedHandshake(t *testing.T) {
++	for _, variant := range []string{"plain", "padding", "header", "content", "full"} {
++		t.Run(variant, func(t *testing.T) {
++			var sockets [2]net.PacketConn
++			var tunnels [2]*tuntest.ChannelTUN
++			var devices [2]*device.Device
++			var private, public [2][]byte
++			ips := [2]netip.Addr{netip.MustParseAddr("100.75.120.5"), netip.MustParseAddr("100.64.0.1")}
++			for i := range sockets {
++				var err error
++				sockets[i], err = net.ListenPacket("udp4", "127.0.0.1:0")
++				if err != nil {
++					t.Fatal(err)
++				}
++				socket := sockets[i]
++				t.Cleanup(func() { socket.Close() })
++				private[i] = bytes.Repeat([]byte{byte(i + 1)}, 32)
++				public[i], err = curve25519.X25519(private[i], curve25519.Basepoint)
++				if err != nil {
++					t.Fatal(err)
++				}
++			}
++			for i := range devices {
++				tunnels[i] = tuntest.NewChannelTUN()
++				// Configure both peers before allowing either to initiate a handshake.
++				<-tunnels[i].TUN().Events()
++				socket := sockets[i]
++				binding := &bind{amnezia: true, listenFunc: func() (net.PacketConn, error) { return socket, nil }}
++				reader := &amneziaReadBarrier{Device: tunnels[i].TUN(), started: make(chan struct{})}
++				// Crypto workers can finish logging after Device.Close returns;
++				// do not retain a testing.T callback beyond the subtest lifetime.
++				devices[i] = device.NewDevice(reader, binding, device.NewLogger(device.LogLevelError, "AmneziaWG test: "))
++				dev := devices[i]
++				t.Cleanup(dev.Close)
++				binding.downFunc = dev.Down
++				select {
++				case <-reader.started:
++				case <-time.After(10 * time.Second):
++					t.Fatal("initial TUN read did not start")
++				}
++				options := []string{
++					"private_key=" + hex.EncodeToString(private[i]),
++					"jc=7", "jmin=10", "jmax=80",
++					"h1=1", "h2=2", "h3=3", "h4=4",
++					"i1=<b 0x" + strings.Repeat("ab", 348) + ">",
++					"i2=<b 0x" + strings.Repeat("cd", 245) + ">",
++				}
++				if variant != "plain" {
++					options = append(options, "s1=1032", "s2=532", "s3=1036", "s4=12")
++				}
++				if variant == "header" || variant == "content" || variant == "full" {
++					options = append(options, "header_protection_key=" + strings.Repeat("03", 32))
++				}
++				if variant == "content" || variant == "full" {
++					options = append(options, "content_padding_addition=10-100")
++				}
++				if variant == "full" {
++					options = append(options,
++						"rekey_after_time=100-120", "rekey_timeout=3-8",
++						"reject_after_time=150-180", "keepalive_timeout=7-13",
++						"max_handshake_attempts=15-20",
++					)
++				}
++				options = append(options,
++					"public_key=" + hex.EncodeToString(public[1-i]),
++					"preshared_key=" + strings.Repeat("04", 32),
++					"endpoint=" + sockets[1-i].LocalAddr().String(),
++					"allowed_ip=" + ips[1-i].String() + "/32",
++					"persistent_keepalive_interval=25-35",
++				)
++				if err := dev.IpcSet(strings.Join(options, "\n") + "\n"); err != nil {
++					t.Fatal(err)
++				}
++			}
++			for _, dev := range devices {
++				if err := dev.Up(); err != nil {
++					t.Fatal(err)
++				}
++			}
++			for i := range devices {
++				packet := tuntest.Ping(ips[1-i], ips[i])
++				select {
++				case tunnels[i].Outbound <- packet:
++				case <-time.After(10 * time.Second):
++					t.Fatal("TUN reader did not start")
++				}
++				select {
++				case received := <-tunnels[1-i].Inbound:
++					if !bytes.Equal(packet, received) {
++						t.Fatal("authenticated packet changed")
++					}
++				case <-time.After(10 * time.Second):
++					t.Fatal("authenticated packet did not arrive")
++				}
++			}
++		})
++	}
++}
+diff --git a/proxy/wireguard/amnezia_transport_test.go b/proxy/wireguard/amnezia_transport_test.go
+new file mode 100644
+index 00000000..9d4ff01a
+--- /dev/null
++++ b/proxy/wireguard/amnezia_transport_test.go
+@@ -0,0 +1,64 @@
++package wireguard
++
++import (
++ "bytes"
++ "context"
++ "errors"
++ "net"
++ "net/netip"
++ "testing"
++ "time"
++
++ "github.com/amnezia-vpn/amneziawg-go/v3/conn"
++ "gvisor.dev/gvisor/pkg/buffer"
++ "gvisor.dev/gvisor/pkg/tcpip/stack"
++)
++
++func TestAmneziaWGBindPreservesProtectedPackets(t *testing.T) {
++ for _, awg := range []bool{true, false} {
++  b := &bind{amnezia: awg, reserved: []byte{9,8,7}, listenFunc: func()(net.PacketConn,error){ return net.ListenPacket("udp4","127.0.0.1:0") }}
++  fns, port, err := b.Open(0); if err != nil { t.Fatal(err) }; defer b.Close()
++  peer, err := net.ListenPacket("udp4","127.0.0.1:0"); if err != nil {t.Fatal(err)}; defer peer.Close()
++  peer.SetDeadline(time.Now().Add(2*time.Second)); b.PacketConn.SetDeadline(time.Now().Add(2*time.Second))
++  original := []byte{0x55,0x91,0xa2,0xb3,0x44,0x67}
++  if _,err=peer.WriteTo(original,&net.UDPAddr{IP:net.IPv4(127,0,0,1),Port:int(port)});err!=nil {t.Fatal(err)}
++  bufs:=[][]byte{make([]byte,2048)}; sizes:=make([]int,1);eps:=make([]conn.Endpoint,1)
++  if _,err=fns[0](bufs,sizes,eps);err!=nil {t.Fatal(err)}
++  want:=append([]byte(nil),original...);if !awg {copy(want[1:4],[]byte{0,0,0})}
++  if !bytes.Equal(bufs[0][:sizes[0]],want) {t.Fatalf("received packet corrupted (amnezia=%v)",awg)}
++  outgoing:=append([]byte(nil),original...)
++  if err=b.Send([][]byte{outgoing},eps[0]);err!=nil {t.Fatal(err)}
++  n,_,err:=peer.ReadFrom(bufs[0]);if err!=nil {t.Fatal(err)}
++  want=append([]byte(nil),original...);if !awg {copy(want[1:4],[]byte{9,8,7})}
++  if !bytes.Equal(bufs[0][:n],want) {t.Fatalf("sent packet corrupted (amnezia=%v)",awg)}
++ }
++}
++
++func TestAmneziaWGTunCloseUnblocksPendingPacket(t *testing.T) {
++ dev,_,_,err:=CreateNetTUN([]netip.Addr{netip.MustParseAddr("10.0.0.2")},nil,1280,true)
++ if err!=nil {t.Fatal(err)}
++ tun:=dev.(*netTun)
++ written:=make(chan struct{})
++ go func(){
++  defer close(written)
++  pkt:=stack.NewPacketBuffer(stack.PacketBufferOptions{Payload:buffer.MakeWithData([]byte{0x45,0,0,20})})
++  defer pkt.DecRef()
++  var list stack.PacketBufferList
++  list.PushBack(pkt)
++  tun.ep.WritePackets(list)
++ }()
++ // No reader exists: the endpoint callback must be released by Close itself.
++ select {case <-written:t.Fatal("packet unexpectedly completed without a reader");case <-time.After(30*time.Millisecond):}
++ closed:=make(chan struct{})
++ go func(){tun.Close();tun.Close();close(closed)}()
++ select {case <-closed:case <-time.After(2*time.Second):t.Fatal("TUN close blocked")}
++ select {case <-written:case <-time.After(2*time.Second):t.Fatal("notifier stayed blocked after close")}
++ if _,err=dev.Read([][]byte{make([]byte,2048)},make([]int,1),0);err==nil {t.Fatal("read after close succeeded")}
++}
++
++func TestAmneziaWGHandlerCannotInitializeAfterClose(t *testing.T) {
++ h:=&Handler{}
++ if err:=h.Close();err!=nil {t.Fatal(err)}
++ if err:=h.Close();err!=nil {t.Fatal(err)}
++ if err:=h.init(context.Background());!errors.Is(err,net.ErrClosed){t.Fatalf("init after close: %v",err)}
++}
+diff --git a/proxy/wireguard/bind.go b/proxy/wireguard/bind.go
+index 0e71e153..704eb279 100644
+--- a/proxy/wireguard/bind.go
++++ b/proxy/wireguard/bind.go
+@@ -12,0 +13 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
+@@ -15 +15,0 @@ import (
+-	"golang.zx2c4.com/wireguard/conn"
+@@ -22,0 +23 @@ type bind struct {
++	amnezia     bool
+@@ -66 +67 @@ func (b *bind) Open(port uint16) (fns []conn.ReceiveFunc, actualPort uint16, err
+-				if n > 3 {
++				if n > 3 && !b.amnezia {
+@@ -104 +105 @@ func (b *bind) Send(bufs [][]byte, ep conn.Endpoint) (err error) {
+-		if len(bufs[i]) > 3 && len(b.reserved) == 3 {
++		if !b.amnezia && len(bufs[i]) > 3 && len(b.reserved) == 3 {
+diff --git a/proxy/wireguard/client.go b/proxy/wireguard/client.go
+index 4491886a..c7cb9a18 100644
+--- a/proxy/wireguard/client.go
++++ b/proxy/wireguard/client.go
+@@ -12 +12 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+@@ -13,0 +14 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/device"
+@@ -30 +30,0 @@ import (
+-	"golang.zx2c4.com/wireguard/device"
+@@ -42,4 +42,5 @@ type Handler struct {
+-	tun  tun.Device
+-	tnet *Net
+-	dev  *device.Device
+-	mu   sync.Mutex
++	tun    tun.Device
++	tnet   *Net
++	dev    *device.Device
++	mu     sync.Mutex
++	closed bool
+@@ -100,0 +102,4 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
++	dnsServers, err := clientDNSServers(conf)
++	if err != nil {
++		return nil, err
++	}
+@@ -109 +114 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+-		tun, tnet, err = createKernelTun(localAddresses, []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("1.0.0.1"), netip.MustParseAddr("2606:4700:4700::1111"), netip.MustParseAddr("2606:4700:4700::1001")}, int(conf.Mtu))
++		tun, tnet, err = createKernelTun(localAddresses, dnsServers, int(conf.Mtu))
+@@ -112 +117 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+-		tun, tnet, _, err = CreateNetTUN(localAddresses, []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("1.0.0.1"), netip.MustParseAddr("2606:4700:4700::1111"), netip.MustParseAddr("2606:4700:4700::1001")}, int(conf.Mtu), true)
++		tun, tnet, _, err = CreateNetTUN(localAddresses, dnsServers, int(conf.Mtu), true)
+@@ -131,0 +137,17 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
++// Keep profile resolvers inside the tunnel: remote domain lookup does not use
++// Xray's global DNS client. Empty preserves the historical WireGuard defaults.
++func clientDNSServers(conf *DeviceConfig) ([]netip.Addr, error) {
++	if len(conf.DnsServers) == 0 {
++		return []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("1.0.0.1"), netip.MustParseAddr("2606:4700:4700::1111"), netip.MustParseAddr("2606:4700:4700::1001")}, nil
++	}
++	servers := make([]netip.Addr, 0, len(conf.DnsServers))
++	for _, value := range conf.DnsServers {
++		addr, err := netip.ParseAddr(value)
++		if err != nil || addr.Zone() != "" {
++			return nil, errors.New("WireGuard DNS server is not an IP literal")
++		}
++		servers = append(servers, addr)
++	}
++	return servers, nil
++}
++
+@@ -142,4 +164,2 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
+-	if h.dev == nil {
+-		if err := h.init(ctx); err != nil {
+-			return err
+-		}
++	if err := h.init(ctx); err != nil {
++		return err
+@@ -147,2 +167,8 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
+-
+-	if err := h.dev.Up(); err != nil {
++	h.mu.Lock()
++	if h.closed {
++		h.mu.Unlock()
++		return gonet.ErrClosed
++	}
++	err := h.dev.Up()
++	h.mu.Unlock()
++	if err != nil {
+@@ -246,0 +273,4 @@ func (h *Handler) Close() (err error) {
++	if h.closed {
++		return nil
++	}
++	h.closed = true
+@@ -260,0 +291,3 @@ func (h *Handler) init(ctx context.Context) error {
++	if h.closed {
++		return gonet.ErrClosed
++	}
+@@ -300 +333 @@ func (h *Handler) init(ctx context.Context) error {
+-	bind := &bind{}
++	bind := &bind{amnezia: h.conf.AmneziaConfig != ""}
+@@ -321,0 +355,6 @@ func (h *Handler) init(ctx context.Context) error {
++	if h.conf.AmneziaConfig != "" {
++		cfg.WriteString(h.conf.AmneziaConfig)
++		if !strings.HasSuffix(h.conf.AmneziaConfig, "\n") {
++			cfg.WriteByte('\n')
++		}
++	}
+@@ -336,0 +376,3 @@ func (h *Handler) init(ctx context.Context) error {
++		dev.Close()
++		h.tun = nil
++		h.closed = true
+@@ -340,0 +383,3 @@ func (h *Handler) init(ctx context.Context) error {
++		dev.Close()
++		h.tun = nil
++		h.closed = true
+diff --git a/proxy/wireguard/config.pb.go b/proxy/wireguard/config.pb.go
+index 59db6564..de62454f 100644
+--- a/proxy/wireguard/config.pb.go
++++ b/proxy/wireguard/config.pb.go
+@@ -167,2 +167,6 @@ type DeviceConfig struct {
+-	unknownFields  protoimpl.UnknownFields
+-	sizeCache      protoimpl.SizeCache
++	// Validated AmneziaWG device UAPI options. Empty retains standard
++	// WireGuard-compatible behavior.
++	AmneziaConfig string `protobuf:"bytes,10,opt,name=amnezia_config,json=amneziaConfig,proto3" json:"amnezia_config,omitempty"`
++	DnsServers []string `protobuf:"bytes,11,rep,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`
++	unknownFields protoimpl.UnknownFields
++	sizeCache     protoimpl.SizeCache
+@@ -263,0 +268,14 @@ func (x *DeviceConfig) GetNoKernelTun() bool {
++func (x *DeviceConfig) GetAmneziaConfig() string {
++	if x != nil {
++		return x.AmneziaConfig
++	}
++	return ""
++}
++
++func (x *DeviceConfig) GetDnsServers() []string {
++	if x != nil {
++		return x.DnsServers
++	}
++	return nil
++}
++
+@@ -278 +296 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
+-	"allowedIps\"\xdc\x03\n" +
++	"allowedIps\"\xa4\x04\n" +
+@@ -289 +307,4 @@ const file_proxy_wireguard_config_proto_rawDesc = "" +
+-	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\"\\\n" +
++	"\rno_kernel_tun\x18\t \x01(\bR\vnoKernelTun\x12%\n" +
++	"\x0eamnezia_config\x18\n" +
++	" \x01(\tR\ramneziaConfig\x12\x1f\n" +
++	"\x0bdns_servers\x18\v \x03(\tR\ndnsServers\"\\\n" +
+diff --git a/proxy/wireguard/config.proto b/proxy/wireguard/config.proto
+index 171d5b21..5c4a61e1 100644
+--- a/proxy/wireguard/config.proto
++++ b/proxy/wireguard/config.proto
+@@ -37 +37,6 @@ message DeviceConfig {
+-}
+\ No newline at end of file
++  // Validated AmneziaWG device UAPI options. Empty retains standard
++  // WireGuard-compatible behavior.
++  string amnezia_config = 10;
++  // Tunnel DNS from the imported profile; empty retains legacy resolvers.
++  repeated string dns_servers = 11;
++}
+diff --git a/proxy/wireguard/netstack.go b/proxy/wireguard/netstack.go
+index 22c42e3f..bf6c341c 100644
+--- a/proxy/wireguard/netstack.go
++++ b/proxy/wireguard/netstack.go
+@@ -18,0 +19 @@ import (
++	"sync"
+@@ -21,0 +23 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+@@ -23 +24,0 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
+@@ -44,0 +46,2 @@ type netTun struct {
++	done           chan struct{}
++	closeOnce      sync.Once
+@@ -60,0 +64 @@ func CreateNetTUN(localAddresses, dnsServers []netip.Addr, mtu int, handleLocal
++		done:           make(chan struct{}),
+@@ -127,2 +131,3 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
+-	view, ok := <-tun.incomingPacket
+-	if !ok {
++	var view *buffer.View
++	select {
++	case <-tun.done:
+@@ -129,0 +135 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
++	case view = <-tun.incomingPacket:
+@@ -130,0 +137 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
++	defer view.Release()
+@@ -169 +176,6 @@ func (tun *netTun) WriteNotify() {
+-	tun.incomingPacket <- view
++	// Shutdown must unblock a notifier even when the device reader has stopped.
++	select {
++	case <-tun.done:
++		view.Release()
++	case tun.incomingPacket <- view:
++	}
+@@ -173,6 +185,8 @@ func (tun *netTun) Close() error {
+-	tun.stack.RemoveNIC(1)
+-	tun.stack.Close()
+-	tun.ep.RemoveNotify(tun.notifyHandle)
+-	tun.ep.Close()
+-
+-	if tun.events != nil {
++	tun.closeOnce.Do(func() {
++		// Unblock pending reads/notifiers before gVisor waits for network workers.
++		// incomingPacket remains open: an in-flight notifier may still select on it.
++		close(tun.done)
++		tun.ep.RemoveNotify(tun.notifyHandle)
++		tun.stack.RemoveNIC(1)
++		tun.stack.Close()
++		tun.ep.Close()
+@@ -180,5 +194 @@ func (tun *netTun) Close() error {
+-	}
+-
+-	if tun.incomingPacket != nil {
+-		close(tun.incomingPacket)
+-	}
++	})
+diff --git a/proxy/wireguard/server.go b/proxy/wireguard/server.go
+index e26479ad..7a8ea40d 100644
+--- a/proxy/wireguard/server.go
++++ b/proxy/wireguard/server.go
+@@ -11,0 +12,2 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/device"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+@@ -28,2 +29,0 @@ import (
+-	"golang.zx2c4.com/wireguard/device"
+-	"golang.zx2c4.com/wireguard/tun"
+diff --git a/proxy/wireguard/tun_default.go b/proxy/wireguard/tun_default.go
+index edad5545..7e8ed171 100644
+--- a/proxy/wireguard/tun_default.go
++++ b/proxy/wireguard/tun_default.go
+@@ -9 +9 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+diff --git a/proxy/wireguard/tun_linux.go b/proxy/wireguard/tun_linux.go
+index eb017547..e7a8a433 100644
+--- a/proxy/wireguard/tun_linux.go
++++ b/proxy/wireguard/tun_linux.go
+@@ -16,0 +17 @@ import (
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+@@ -20 +20,0 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
+@@ -277,2 +277,5 @@ func KernelTunSupported() (bool, error) {
+-	var data unix.CapUserData
+-	if err := unix.Capget(&hdr, &data); err != nil {
++	// Linux capability ABI v3 writes two records, including on 32-bit Android.
++	// A single record lets capget overwrite adjacent stack memory during startup.
++	// Keep both records while using LINUX_CAPABILITY_VERSION_3 (capget(2)).
++	var data [2]unix.CapUserData
++	if err := unix.Capget(&hdr, &data[0]); err != nil {
+@@ -282 +285 @@ func KernelTunSupported() (bool, error) {
+-	return (data.Effective & (1 << unix.CAP_NET_ADMIN)) != 0, nil
++	return (data[0].Effective & (1 << unix.CAP_NET_ADMIN)) != 0, nil
