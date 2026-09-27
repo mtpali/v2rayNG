@@ -58,7 +58,6 @@ object NotificationManager {
         val power = getService()?.getSystemService(Context.POWER_SERVICE) as? PowerManager
         if (getService() is CoreVpnService && CoreServiceManager.isAmneziaProfile() && power?.isInteractive == false) return
 
-        lastQueryTime = System.currentTimeMillis()
         var lastZeroSpeed = false
 
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
