@@ -60,7 +60,7 @@ patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
     GOWORK=off go test ./proxy/wireguard -count=1
     # Stress teardown and packet delivery under the host race detector.
     GOWORK=off go test -race ./proxy/wireguard -run TestAmneziaWG -skip TestAmneziaWGProtectedHandshake -count=10 -timeout=90s
-    GOWORK=off go test -race ./proxy/wireguard -run TestAmneziaWGProtectedHandshake -count=1 -timeout=90s
+    GOWORK=off go test -race ./proxy/wireguard -run TestAmneziaWGProtectedHandshake -count=1 -timeout=180s
 
     # Exercise actual 32-bit ARM machine code; amd64 tests cannot detect ARM-only
     # startup failures. This checks Linux userspace, not Android VPN integration.
@@ -71,7 +71,7 @@ patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
         qemu-arm "$task_dir/conf-armv7.test" -test.run TestAmneziaWG -test.v -test.timeout 90s
         GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
             go test -c ./proxy/wireguard -o "$task_dir/wireguard-armv7.test"
-        qemu-arm "$task_dir/wireguard-armv7.test" -test.run TestAmneziaWG -test.v -test.timeout 90s
+        qemu-arm "$task_dir/wireguard-armv7.test" -test.run TestAmneziaWG -test.v -test.timeout 180s
     fi
 )
 

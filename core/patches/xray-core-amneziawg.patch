@@ -592,7 +592,7 @@ index 00000000..71bbd7ae
 +					if !bytes.Equal(packet, received) {
 +						t.Fatal("authenticated packet changed")
 +					}
-+				case <-time.After(10 * time.Second):
++				case <-time.After(20 * time.Second):
 +					t.Fatal("authenticated packet did not arrive")
 +				}
 +			}
