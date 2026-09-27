@@ -73,6 +73,15 @@ patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
             go test -c ./proxy/wireguard -o "$task_dir/wireguard-armv7.test"
         qemu-arm "$task_dir/wireguard-armv7.test" -test.run TestAmneziaWG -test.v -test.timeout 180s
     fi
+    if [[ "${AWG_TEST_ARM64:-0}" == "1" ]]; then
+        command -v qemu-aarch64 >/dev/null
+        GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+            go test -c ./infra/conf -o "$task_dir/conf-arm64.test"
+        qemu-aarch64 "$task_dir/conf-arm64.test" -test.run TestAmneziaWG -test.v -test.timeout 90s
+        GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+            go test -c ./proxy/wireguard -o "$task_dir/wireguard-arm64.test"
+        qemu-aarch64 "$task_dir/wireguard-arm64.test" -test.run TestAmneziaWG -test.v -test.timeout 180s
+    fi
 )
 
 (
@@ -83,7 +92,7 @@ patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
     GOWORK=off go mod tidy
     GOWORK=off gomobile bind \
         -v \
-        -target=android/arm \
+        -target=android/arm,android/arm64 \
         -androidapi 24 \
         -trimpath \
         "-ldflags=-s -w -buildid= -checklinkname=0" \

@@ -54,4 +54,46 @@ class VpnNetworkRecoveryGateTest {
         assertTrue(gate.onLost(1L))
         assertTrue(gate.onAvailable(1L, true))
     }
+
+    @Test fun longSleepRecoversAmneziaEvenWhenTheUnderlyingNetworkNeverChanges() {
+        val gate = VpnNetworkRecoveryGate()
+        assertFalse(gate.onAvailable(7L, true))
+        gate.onScreenOff(1_000L)
+        gate.onScreenOff(30_000L) // Duplicate broadcast must not reset the timer.
+        assertTrue(gate.onUserPresent(301_000L, true))
+        assertFalse(gate.onUserPresent(301_001L, true))
+        assertFalse(gate.onAvailable(7L, true))
+        assertTrue(gate.takeRecovery())
+    }
+
+    @Test fun wakeRecoverySkipsShortSleepsAndOtherProtocols() {
+        val gate = VpnNetworkRecoveryGate()
+        gate.onScreenOff(1_000L)
+        assertFalse(gate.onUserPresent(180_999L, true))
+        gate.onScreenOff(200_000L)
+        assertFalse(gate.onUserPresent(500_000L, false))
+        gate.onScreenOff(510_000L)
+        assertTrue(gate.onUserPresent(690_000L, true))
+    }
+
+    @Test fun stopRacingWithWakeCancelsPendingRecovery() {
+        val gate = VpnNetworkRecoveryGate()
+        gate.onScreenOff(0L)
+        assertTrue(gate.onUserPresent(300_000L, true))
+        gate.cancelRecovery()
+        gate.stop()
+        assertFalse(gate.recoveryRequested())
+        assertFalse(gate.onUserPresent(600_000L, true))
+        gate.onScreenOff(601_000L)
+        assertFalse(gate.onUserPresent(900_000L, true))
+    }
+
+    @Test fun sleepDuringPendingWakeCanRetryOnTheNextUnlock() {
+        val gate = VpnNetworkRecoveryGate()
+        gate.onScreenOff(0L)
+        assertTrue(gate.onUserPresent(300_000L, true))
+        gate.onScreenOff(301_000L)
+        gate.cancelRecovery()
+        assertTrue(gate.onUserPresent(601_000L, true))
+    }
 }

@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Build
+import android.os.PowerManager
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import com.v2ray.ang.AppConfig
@@ -16,6 +17,7 @@ import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.extension.toSpeedString
+import com.v2ray.ang.service.CoreVpnService
 import com.v2ray.ang.ui.MainActivity
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.CoroutineScope
@@ -50,7 +52,13 @@ object NotificationManager {
     fun startSpeedNotification() {
         displaySpeed = MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) == true
         if (speedNotificationJob != null || CoreServiceManager.isRunning() == false) return
+        // MobileTinaVPN does not poll the native core while the screen is off.
+        // Keep that idle behavior for Amnezia; Xray's counters retain the bytes
+        // until the next sample or the final flush during shutdown.
+        val power = getService()?.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (getService() is CoreVpnService && CoreServiceManager.isAmneziaProfile() && power?.isInteractive == false) return
 
+        lastQueryTime = System.currentTimeMillis()
         var lastZeroSpeed = false
 
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -143,8 +151,14 @@ object NotificationManager {
      * Stops the speed notification.
      */
     fun stopSpeedNotification() {
-        // Screen-off stops presentation, not accounting; one sampler remains.
+        // The native counters retain Amnezia traffic while the screen is off;
+        // the next sample or shutdown flush persists it.
         displaySpeed = false
+        if (getService() is CoreVpnService && CoreServiceManager.isAmneziaProfile()) {
+            statsScope?.cancel()
+            statsScope = null
+            speedNotificationJob = null
+        }
     }
 
     /**

@@ -1,4 +1,4 @@
-name: Build ARMv7 F-Droid APK
+name: Build ARMv7 and ARM64 F-Droid APKs
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: armv7-fdroid-${{ github.workflow }}-${{ github.ref }}
+  group: arm-fdroid-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -86,9 +86,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-226-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/amneziawg-go-s4.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-226-armv7-arm64-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/amneziawg-go-s4.patch', 'scripts/build-amnezia-libv2ray.sh') }}
 
-      - name: Install ARMv7 userspace test emulator
+      - name: Install ARM userspace test emulators
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
@@ -103,46 +103,58 @@ jobs:
           go install "golang.org/x/mobile/cmd/gomobile@$MOBILE_VERSION"
           export PATH="$(go env GOPATH)/bin:$PATH"
           gomobile init
-          AWG_TEST_ARMV7=1 bash scripts/build-amnezia-libv2ray.sh V2rayNG/app/libs/libv2ray.aar
+          AWG_TEST_ARMV7=1 AWG_TEST_ARM64=1 bash scripts/build-amnezia-libv2ray.sh V2rayNG/app/libs/libv2ray.aar
 
       - name: Save AmneziaWG libv2ray cache
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-226-armv7-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/amneziawg-go-s4.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-226-armv7-arm64-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/amneziawg-go-s4.patch', 'scripts/build-amnezia-libv2ray.sh') }}
 
-      - name: Test and build F-Droid ARMv7 APK
+      - name: Test and build ARMv7 and ARM64 APKs
         working-directory: V2rayNG
         run: |
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           chmod 755 gradlew
-          ./gradlew :app:testFdroidDebugUnitTest :app:compileFdroidDebugKotlin \
-            :app:assembleFdroidRelease -PABI_FILTERS=armeabi-v7a
+          ./gradlew :app:testPlaystoreDebugUnitTest :app:compilePlaystoreDebugKotlin \
+            :app:assemblePlaystoreDebug :app:testFdroidDebugUnitTest \
+            :app:compileFdroidDebugKotlin :app:assembleFdroidRelease \
+            '-PABI_FILTERS=armeabi-v7a;arm64-v8a'
 
       - name: Verify APK ABI and native libraries
         run: |
           set -euo pipefail
-          APK_PATH=$(find V2rayNG/app/build/outputs/apk/fdroid/release \
-            -type f -name '*armeabi-v7a*.apk' -print -quit)
-          test -n "$APK_PATH"
-          unzip -Z1 "$APK_PATH" | grep -q '^lib/armeabi-v7a/libgojni.so$'
-          unzip -Z1 "$APK_PATH" | grep -q '^lib/armeabi-v7a/libhev-socks5-tunnel.so$'
-          unzip -Z1 "$APK_PATH" | grep -q '^lib/armeabi-v7a/libhevsockstun.so$'
-          if unzip -Z1 "$APK_PATH" | grep -q 'nav_header_bg'; then
-            echo "Removed navigation header image is still packaged" >&2
-            exit 1
-          fi
-          if unzip -Z1 "$APK_PATH" | grep -Eq '^lib/(arm64-v8a|x86|x86_64)/'; then
-            echo "Unexpected non-ARMv7 native library in APK" >&2
-            exit 1
-          fi
+          for ABI in armeabi-v7a arm64-v8a; do
+            APK_PATH=$(find V2rayNG/app/build/outputs/apk/fdroid/release \
+              -type f -name "*${ABI}*.apk" -print -quit)
+            test -n "$APK_PATH"
+            for LIB in libgojni.so libhev-socks5-tunnel.so libhevsockstun.so; do
+              unzip -Z1 "$APK_PATH" | grep -q "^lib/${ABI}/${LIB}$"
+            done
+            if unzip -Z1 "$APK_PATH" | grep -q 'nav_header_bg'; then
+              echo "Removed navigation header image is still packaged" >&2
+              exit 1
+            fi
+            if unzip -Z1 "$APK_PATH" | grep -E '^lib/[^/]+/' | grep -v "^lib/${ABI}/"; then
+              echo "Unexpected ABI in $APK_PATH" >&2
+              exit 1
+            fi
+          done
 
       - name: Upload ARMv7 F-Droid APK
         uses: actions/upload-artifact@v7
         with:
           name: v2rayNG-2.2.6-fdroid-armeabi-v7a
           path: V2rayNG/app/build/outputs/apk/fdroid/release/*armeabi-v7a*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload ARM64 F-Droid APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: v2rayNG-2.2.6-fdroid-arm64-v8a
+          path: V2rayNG/app/build/outputs/apk/fdroid/release/*arm64-v8a*.apk
           if-no-files-found: error
           retention-days: 30
 

@@ -1,9 +1,12 @@
 package com.v2ray.ang.service
 
 import android.annotation.SuppressLint
+import android.app.KeyguardManager
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
@@ -13,8 +16,11 @@ import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.os.StrictMode
+import android.os.SystemClock
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.AppConfig.LOOPBACK
 import com.v2ray.ang.BuildConfig
@@ -28,6 +34,12 @@ import com.v2ray.ang.root.RootLanSharing
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MyContextWrapper
 import com.v2ray.ang.util.Utils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.lang.ref.SoftReference
 
 @SuppressLint("VpnServicePolicy")
@@ -40,6 +52,38 @@ class CoreVpnService : VpnService(), ServiceControl {
     @Volatile private var networkRecovery = VpnNetworkRecoveryGate()
     @Volatile private var defaultNetworkCallback: ConnectivityManager.NetworkCallback? = null
     private var tun2SocksService: Tun2SocksControl? = null
+    private val wakeRecoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var wakeReceiverRegistered = false
+    private val wakeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val gate = networkRecovery
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> gate.onScreenOff(SystemClock.elapsedRealtime())
+                Intent.ACTION_USER_PRESENT -> recoverAfterIdle(gate)
+                Intent.ACTION_SCREEN_ON ->
+                    if (!(getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked) {
+                        recoverAfterIdle(gate)
+                    }
+            }
+        }
+    }
+
+    private fun recoverAfterIdle(gate: VpnNetworkRecoveryGate) {
+        if (!gate.onUserPresent(SystemClock.elapsedRealtime(), canRecoverAmnezia())) return
+        LogUtil.i(AppConfig.TAG, "StartCore-VPN: Long screen-off interval; recovering Amnezia tunnel")
+        wakeRecoveryScope.launch {
+            // Let Android restore network access after the screen wakes before
+            // binding a new protected UDP socket on the same Wi-Fi/cellular network.
+            delay(1_500L)
+            if (!(getSystemService(POWER_SERVICE) as PowerManager).isInteractive) {
+                gate.cancelRecovery()
+                return@launch
+            }
+            if (gate === networkRecovery && gate.recoveryRequested() && canRecoverAmnezia()) {
+                recoverFromNetworkChange()
+            }
+        }
+    }
 
     /**destroy
      * Unfortunately registerDefaultNetworkCallback is going to return our VPN interface: https://android.googlesource.com/platform/frameworks/base/+/dda156ab0c5d66ad82bdcf76cda07cbc0a9c8a2e
@@ -152,6 +196,8 @@ class CoreVpnService : VpnService(), ServiceControl {
             return
         }
         coreReady = true
+
+        if (CoreServiceManager.isAmneziaProfile()) registerAwakeRecovery()
 
         // Start LAN sharing if enabled in settings
         RootLanSharing.startClientSharing(this)
@@ -371,7 +417,34 @@ class CoreVpnService : VpnService(), ServiceControl {
         tun2SocksService?.startTun2Socks()
     }
 
-    private fun canRecoverAmnezia() = !stopping.get() && coreReady && CoreServiceManager.isAmneziaRunning()
+    private fun canRecoverAmnezia() = !stopping.get() && coreReady && CoreServiceManager.isAmneziaProfile()
+
+    @Synchronized private fun registerAwakeRecovery() {
+        if (wakeReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        try {
+            ContextCompat.registerReceiver(this, wakeReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            wakeReceiverRegistered = true
+            val power = getSystemService(POWER_SERVICE) as PowerManager
+            if (!power.isInteractive) networkRecovery.onScreenOff(SystemClock.elapsedRealtime())
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to register Amnezia wake receiver", e)
+        }
+    }
+
+    @Synchronized private fun unregisterAwakeRecovery() {
+        if (!wakeReceiverRegistered) return
+        wakeReceiverRegistered = false
+        try {
+            unregisterReceiver(wakeReceiver)
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StopCore-VPN: Failed to unregister Amnezia wake receiver", e)
+        }
+    }
 
     private fun recoverFromNetworkChange() {
         if (!stopping.compareAndSet(false, true)) return
@@ -380,12 +453,14 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     private fun stopAllService() {
         networkRecovery.cancelRecovery()
+        wakeRecoveryScope.cancel()
         if (!stopping.compareAndSet(false, true)) return
         releaseVpnAndCore()
     }
 
     private fun releaseVpnAndCore() {
         networkRecovery.stop()
+        unregisterAwakeRecovery()
         coreReady = false
         isRunning = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

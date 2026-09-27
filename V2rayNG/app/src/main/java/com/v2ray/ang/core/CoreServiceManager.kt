@@ -123,8 +123,8 @@ object CoreServiceManager {
      */
     fun isRunning() = coreController.isRunning
 
-    /** Daemon-owned state used by the VPN service when its physical network changes. */
-    fun isAmneziaRunning() = coreController.isRunning && currentConfig?.isAmneziaWG == true
+    /** Daemon-owned profile type; callers separately check that their service owns a live core. */
+    fun isAmneziaProfile() = currentConfig?.isAmneziaWG == true
 
     /**
      * Gets the name of the currently running server.
