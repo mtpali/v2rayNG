@@ -6,9 +6,11 @@ import org.junit.Test
 class VpnNetworkRecoveryGateTest {
     @Test fun firstNetworkAndDuplicateCallbacksDoNotRestart() {
         val gate = VpnNetworkRecoveryGate()
+        assertFalse(gate.hasAvailableNetwork())
         assertFalse(gate.onAvailable(1L, true))
         assertFalse(gate.onAvailable(1L, true))
         assertTrue(gate.isCurrent(1L))
+        assertTrue(gate.hasAvailableNetwork())
     }
 
     @Test fun oneAmneziaHandoverRestartsAndStopInvalidatesLateCallbacks() {
@@ -52,7 +54,9 @@ class VpnNetworkRecoveryGateTest {
         assertFalse(gate.onAvailable(1L, true))
         assertFalse(gate.onLost(2L))
         assertTrue(gate.onLost(1L))
+        assertFalse(gate.hasAvailableNetwork())
         assertTrue(gate.onAvailable(1L, true))
+        assertTrue(gate.hasAvailableNetwork())
     }
 
     @Test fun longSleepRecoversAmneziaEvenWhenTheUnderlyingNetworkNeverChanges() {
@@ -82,10 +86,30 @@ class VpnNetworkRecoveryGateTest {
         assertTrue(gate.onUserPresent(300_000L, true))
         gate.cancelRecovery()
         gate.stop()
+        assertFalse(gate.hasAvailableNetwork())
         assertFalse(gate.recoveryRequested())
         assertFalse(gate.onUserPresent(600_000L, true))
         gate.onScreenOff(601_000L)
         assertFalse(gate.onUserPresent(900_000L, true))
+    }
+
+    @Test fun blockedNetworkCannotResumeWakeRecoveryUntilUnblocked() {
+        val gate = VpnNetworkRecoveryGate()
+        assertFalse(gate.onAvailable(1L, true))
+        assertFalse(gate.onBlockedStatus(1L, true, true))
+        assertFalse(gate.hasAvailableNetwork())
+        assertTrue(gate.onBlockedStatus(1L, false, true))
+        assertTrue(gate.hasAvailableNetwork())
+    }
+
+    @Test fun recoveredServiceUsesANewGateForAnotherSleepCycle() {
+        val priorRun = VpnNetworkRecoveryGate()
+        priorRun.onScreenOff(0L)
+        assertTrue(priorRun.onUserPresent(300_000L, true))
+        priorRun.stop()
+        val nextRun = VpnNetworkRecoveryGate()
+        nextRun.onScreenOff(400_000L)
+        assertTrue(nextRun.onUserPresent(700_000L, true))
     }
 
     @Test fun sleepDuringPendingWakeCanRetryOnTheNextUnlock() {

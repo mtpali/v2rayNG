@@ -1,7 +1,6 @@
 package com.v2ray.ang.service
 
 import android.annotation.SuppressLint
-import android.app.KeyguardManager
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -60,27 +59,38 @@ class CoreVpnService : VpnService(), ServiceControl {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> gate.onScreenOff(SystemClock.elapsedRealtime())
                 Intent.ACTION_USER_PRESENT -> recoverAfterIdle(gate)
-                Intent.ACTION_SCREEN_ON ->
-                    if (!(getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked) {
-                        recoverAfterIdle(gate)
-                    }
+                Intent.ACTION_SCREEN_ON -> recoverAfterIdle(gate)
             }
         }
     }
 
     private fun recoverAfterIdle(gate: VpnNetworkRecoveryGate) {
         if (!gate.onUserPresent(SystemClock.elapsedRealtime(), canRecoverAmnezia())) return
-        LogUtil.i(AppConfig.TAG, "StartCore-VPN: Long screen-off interval; recovering Amnezia tunnel")
+        LogUtil.i(AppConfig.TAG, "StartCore-VPN: Long screen-off interval; scheduling Amnezia recovery")
         wakeRecoveryScope.launch {
-            // Let Android restore network access after the screen wakes before
-            // binding a new protected UDP socket on the same Wi-Fi/cellular network.
+            // Android can wake the display before lifting Doze's network block.
+            // Wait for the physical network before recreating the protected UDP socket.
             delay(1_500L)
-            if (!(getSystemService(POWER_SERVICE) as PowerManager).isInteractive) {
-                gate.cancelRecovery()
-                return@launch
-            }
-            if (gate === networkRecovery && gate.recoveryRequested() && canRecoverAmnezia()) {
-                recoverFromNetworkChange()
+            val power = getSystemService(POWER_SERVICE) as PowerManager
+            var waitingLogged = false
+            while (gate === networkRecovery && gate.recoveryRequested() && canRecoverAmnezia()) {
+                if (!power.isInteractive) {
+                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: Canceling Amnezia recovery after screen turned off")
+                    gate.cancelRecovery()
+                    return@launch
+                }
+                val awake = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || !power.isDeviceIdleMode
+                val networkReady = Build.VERSION.SDK_INT < Build.VERSION_CODES.P || gate.hasAvailableNetwork()
+                if (awake && networkReady) {
+                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: Network ready; restarting Amnezia tunnel")
+                    recoverFromNetworkChange()
+                    return@launch
+                }
+                if (!waitingLogged) {
+                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: Waiting for physical network before Amnezia recovery")
+                    waitingLogged = true
+                }
+                delay(500L)
             }
         }
     }
@@ -172,8 +182,8 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service command received")
-        NotificationManager.showNotification(null)
         if (stopping.get()) return START_NOT_STICKY
+        NotificationManager.showNotification(null)
         if (isRunning && CoreServiceManager.isRunning()) return START_STICKY
         if (!setupVpnService()) return START_NOT_STICKY
         startService()
@@ -331,12 +341,14 @@ class CoreVpnService : VpnService(), ServiceControl {
      * @param builder The VPN Builder to configure
      */
     private fun configurePlatformFeatures(builder: Builder) {
+        // A successful in-service recovery reuses this Service. A stopped gate
+        // from the previous run must not suppress the next sleep/wake cycle.
+        val gate = VpnNetworkRecoveryGate()
+        networkRecovery = gate
         // Android P (API 28) and above: Configure network callbacks
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
-                val gate = VpnNetworkRecoveryGate()
                 val callback = createNetworkCallback(gate)
-                networkRecovery = gate
                 defaultNetworkCallback = callback
                 connectivity.requestNetwork(defaultNetworkRequest, callback)
             } catch (e: Exception) {
@@ -454,7 +466,12 @@ class CoreVpnService : VpnService(), ServiceControl {
     private fun stopAllService() {
         networkRecovery.cancelRecovery()
         wakeRecoveryScope.cancel()
-        if (!stopping.compareAndSet(false, true)) return
+        if (!stopping.compareAndSet(false, true)) {
+            // A user stop can arrive during a wake recovery, whose native stop
+            // deliberately kept the foreground notification until restart.
+            NotificationManager.cancelNotification()
+            return
+        }
         releaseVpnAndCore()
     }
 
@@ -494,6 +511,11 @@ class CoreVpnService : VpnService(), ServiceControl {
                 NotificationManager.cancelNotification()
                 stopSelf()
             }
+        }, onFailed = {
+            // Never keep a foreground VPN notification after a failed native stop.
+            // The descriptor is closed by onStopped even when stopLoop throws.
+            NotificationManager.cancelNotification()
+            stopSelf()
         }, keepForeground = networkRecovery.recoveryRequested())
         if (!initiated) {
             LogUtil.e(AppConfig.TAG, "StopCore-VPN: Shutdown unavailable, stopping service")

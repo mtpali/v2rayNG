@@ -315,19 +315,19 @@ object CoreServiceManager {
     fun stopCoreLoop(
         onStopped: (() -> Unit)? = null,
         onFinished: (() -> Unit)? = null,
+        onFailed: (() -> Unit)? = null,
         keepForeground: Boolean = false,
     ): Boolean {
         val service = getService() ?: return false
         if (!stopGate.begin(onStopped)) return true
+        val mode = service.javaClass.simpleName
+        val profileId = trafficGuid ?: "none"
 
         // Stop sampling before releasing the core; only acknowledge stop after its
         // sockets and tunnel have actually closed, never after an arbitrary delay.
         NotificationManager.cancelNotification(keepForeground)
-        try {
-            service.unregisterReceiver(mMsgReceive)
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StopCore-Manager: Failed to unregister receiver", e)
-        }
+        // Keep the control receiver until shutdown completes. Otherwise a stop
+        // tapped during a wake recovery is lost while the notification is still up.
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         stoppingScope = scope
         scope.launch {
@@ -347,28 +347,42 @@ object CoreServiceManager {
                 browserDialer = null
                 stopped = !coreController.isRunning
             } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StopCore-Manager: Native shutdown failed", e)
+                LogUtil.e(AppConfig.TAG, "StopCore-$mode: profile=$profileId native shutdown failed", e)
             } finally {
                 // The VPN owner closes its descriptor only after native shutdown.
                 // Keep the gate closed while owner cleanup runs.
                 do {
                     stopGate.drain().forEach { callback ->
                         try { callback() } catch (e: Exception) {
-                            LogUtil.e(AppConfig.TAG, "StopCore-Manager: Owner cleanup failed", e)
+                            LogUtil.e(AppConfig.TAG, "StopCore-$mode: profile=$profileId owner cleanup failed", e)
                         }
                     }
-                } while (stopped && !stopGate.finishIfDrained())
-                if (stopped) {
-                    MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
-                    withContext(Dispatchers.Main) {
+                } while (!stopGate.finishIfDrained())
+                withContext(Dispatchers.Main) {
+                    try {
+                        service.unregisterReceiver(mMsgReceive)
+                    } catch (e: Exception) {
+                        LogUtil.e(AppConfig.TAG, "StopCore-$mode: profile=$profileId failed to unregister receiver", e)
+                    }
+                    if (stopped) {
+                        MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
                         try {
                             onFinished?.invoke()
                         } catch (e: Exception) {
-                            LogUtil.e(AppConfig.TAG, "StopCore-Manager: VPN recovery after cleanup failed", e)
+                            LogUtil.e(AppConfig.TAG, "StopCore-$mode: profile=$profileId completion callback failed", e)
                         }
                         val restart = restartContext
                         restartContext = null
                         if (restart != null) startVService(restart)
+                    } else {
+                        restartContext = null
+                        NotificationManager.cancelNotification()
+                        MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, service.getString(R.string.toast_services_stop_failure))
+                        try {
+                            onFailed?.invoke()
+                        } catch (e: Exception) {
+                            LogUtil.e(AppConfig.TAG, "StopCore-$mode: profile=$profileId failed to clean up after shutdown failure", e)
+                        }
                     }
                 }
                 stoppingScope = null

@@ -58,6 +58,8 @@ internal class VpnNetworkRecoveryGate {
 
     @Synchronized fun isActive(): Boolean = !stopped
 
+    @Synchronized fun hasAvailableNetwork(): Boolean = !stopped && lastNetwork != null && !lost && !blocked
+
     @Synchronized fun recoveryRequested(): Boolean = restartRequested
 
     @Synchronized fun cancelRecovery() {
