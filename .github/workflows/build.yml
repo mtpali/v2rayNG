@@ -24,6 +24,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
+          # The release APK must be built from this branch's 2.2.6 source.
+          # The PR merge ref can inherit main's deletion of gradle-wrapper.jar.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
           fetch-depth: 0
 
