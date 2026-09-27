@@ -158,7 +158,7 @@ class CoreVpnService : VpnService(), ServiceControl {
     }
 
     override fun stopService() {
-        stopAllService(true)
+        stopAllService()
     }
 
     override fun vpnProtect(socket: Int): Boolean {
