@@ -1,0 +1,175 @@
+name: Build ARMv7 and ARM64 F-Droid APKs
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arm-fdroid-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # The release APK must be built from this branch's 2.2.6 source.
+          # The PR merge ref can inherit main's deletion of gradle-wrapper.jar.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+          cmdline-tools-version: '14742923'
+          packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
+
+      - name: Install NDK
+        run: |
+          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            --channel=0 \
+            --install "ndk;29.0.14206865"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+
+      - name: Restore libhevtun cache
+        id: cache-libhevtun-restore
+        uses: actions/cache/restore@v6
+        with:
+          path: libs
+          key: libhevtun-226-${{ runner.os }}-ndk29-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD', 'compile-hevtun.sh') }}
+
+      - name: Build libhevtun
+        if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
+        run: bash compile-hevtun.sh
+
+      - name: Save libhevtun cache
+        if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: libs
+          key: libhevtun-226-${{ runner.os }}-ndk29-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD', 'compile-hevtun.sh') }}
+
+      - name: Copy libhevtun
+        run: cp -r libs V2rayNG/app
+
+      - name: Setup Java
+        uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: AndroidLibXrayLite/go.mod
+          cache: true
+          cache-dependency-path: |
+            AndroidLibXrayLite/go.sum
+            core/patches/xray-core-amneziawg.patch
+            core/patches/amneziawg-go-s4.patch
+
+      - name: Restore AmneziaWG libv2ray cache
+        id: awg-core-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: V2rayNG/app/libs/libv2ray.aar
+          key: awg-226-armv7-arm64-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/amneziawg-go-s4.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+
+      - name: Install ARM userspace test emulators
+        if: steps.awg-core-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user
+
+      - name: Build libv2ray with AmneziaWG v3
+        if: steps.awg-core-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          MOBILE_VERSION=$(awk '$1 == "golang.org/x/mobile" { print $2; exit }' AndroidLibXrayLite/go.mod)
+          test -n "$MOBILE_VERSION"
+          go install "golang.org/x/mobile/cmd/gomobile@$MOBILE_VERSION"
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          gomobile init
+          AWG_TEST_ARMV7=1 AWG_TEST_ARM64=1 bash scripts/build-amnezia-libv2ray.sh V2rayNG/app/libs/libv2ray.aar
+
+      - name: Save AmneziaWG libv2ray cache
+        if: steps.awg-core-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: V2rayNG/app/libs/libv2ray.aar
+          key: awg-226-armv7-arm64-libv2ray-${{ runner.os }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/amneziawg-go-s4.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+
+      - name: Test and build ARMv7 and ARM64 APKs
+        working-directory: V2rayNG
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          chmod 755 gradlew
+          ./gradlew :app:testPlaystoreDebugUnitTest :app:compilePlaystoreDebugKotlin \
+            :app:assemblePlaystoreDebug :app:testFdroidDebugUnitTest \
+            :app:compileFdroidDebugKotlin :app:assembleFdroidRelease \
+            '-PABI_FILTERS=armeabi-v7a;arm64-v8a'
+
+      - name: Verify APK ABI and native libraries
+        run: |
+          set -euo pipefail
+          for ABI in armeabi-v7a arm64-v8a; do
+            APK_PATH=$(find V2rayNG/app/build/outputs/apk/fdroid/release \
+              -type f -name "*${ABI}*.apk" -print -quit)
+            test -n "$APK_PATH"
+            for LIB in libgojni.so libhev-socks5-tunnel.so libhevsockstun.so; do
+              unzip -Z1 "$APK_PATH" | grep -q "^lib/${ABI}/${LIB}$"
+            done
+            if unzip -Z1 "$APK_PATH" | grep -q 'nav_header_bg'; then
+              echo "Removed navigation header image is still packaged" >&2
+              exit 1
+            fi
+            if unzip -Z1 "$APK_PATH" | grep -E '^lib/[^/]+/' | grep -v "^lib/${ABI}/"; then
+              echo "Unexpected ABI in $APK_PATH" >&2
+              exit 1
+            fi
+            VERSION_CODE=$("$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK_PATH" \
+              | sed -n "s/^package: name='[^']*' versionCode='\([0-9]*\)'.*/\1/p")
+            test -n "$VERSION_CODE"
+            if [ "$ABI" = armeabi-v7a ]; then
+              ARMV7_CODE=$VERSION_CODE
+            else
+              test "$VERSION_CODE" -gt "$ARMV7_CODE"
+            fi
+          done
+
+      - name: Upload ARMv7 F-Droid APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: v2rayNG-2.2.6-fdroid-armeabi-v7a
+          path: V2rayNG/app/build/outputs/apk/fdroid/release/*armeabi-v7a*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload ARM64 F-Droid APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: v2rayNG-2.2.6-fdroid-arm64-v8a
+          path: V2rayNG/app/build/outputs/apk/fdroid/release/*arm64-v8a*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload R8 mapping for crash diagnosis
+        uses: actions/upload-artifact@v7
+        with:
+          name: v2rayNG-r8-mapping
+          path: V2rayNG/app/build/outputs/mapping/fdroidRelease/mapping.txt
+          if-no-files-found: error
+          retention-days: 30

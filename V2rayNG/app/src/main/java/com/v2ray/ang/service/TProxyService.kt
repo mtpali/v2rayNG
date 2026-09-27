@@ -21,15 +21,11 @@ class TProxyService(
     companion object {
         @JvmStatic
         @Suppress("FunctionName")
-        private external fun TProxyStartService(configPath: String, fd: Int): Boolean
+        private external fun TProxyStartService(configPath: String, fd: Int)
 
         @JvmStatic
         @Suppress("FunctionName")
-        private external fun TProxyStopService(): Boolean
-
-        @JvmStatic
-        @Suppress("FunctionName")
-        private external fun TProxyIsRunning(): Boolean
+        private external fun TProxyStopService()
 
         @JvmStatic
         @Suppress("FunctionName")
@@ -97,7 +93,7 @@ class TProxyService(
             appendLine("misc:")
             appendLine("  tcp-read-write-timeout: ${tcpTimeout * 1000}")
             appendLine("  udp-read-write-timeout: ${udpTimeout * 1000}")
-            appendLine("  log-level: ${MmkvManager.decodeSettingsString(AppConfig.PREF_HEV_TUNNEL_LOGLEVEL, AppConfig.DEFAULT_HEV_TUNNEL_LOGLEVEL)}")
+            appendLine("  log-level: ${MmkvManager.decodeSettingsString(AppConfig.PREF_HEV_TUNNEL_LOGLEVEL) ?: "warn"}")
         }
     }
 

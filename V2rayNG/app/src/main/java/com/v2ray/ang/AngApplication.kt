@@ -1,17 +1,14 @@
 package com.v2ray.ang
 
-import android.app.Application
 import android.content.Context
-import androidx.core.content.ContextCompat
+import androidx.multidex.MultiDexApplication
 import androidx.work.Configuration
 import androidx.work.WorkManager
+import com.tencent.mmkv.MMKV
 import com.v2ray.ang.AppConfig.ANG_PACKAGE
-import com.v2ray.ang.handler.AppLocaleManager
-import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
-import com.v2ray.ang.ui.compose.ThemeManager
 
-class AngApplication : Application() {
+class AngApplication : MultiDexApplication() {
     companion object {
         lateinit var application: AngApplication
     }
@@ -21,7 +18,7 @@ class AngApplication : Application() {
      * @param base The base context.
      */
     override fun attachBaseContext(base: Context?) {
-        super.attachBaseContext(base?.let(ContextCompat::getContextForLanguage))
+        super.attachBaseContext(base)
         application = this
     }
 
@@ -35,17 +32,17 @@ class AngApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        MmkvManager.initialize(this)
-
-        AppLocaleManager.initialize(this)
+        MMKV.initialize(this)
 
         // Initialize WorkManager with the custom configuration
         WorkManager.initialize(this, workManagerConfiguration)
 
         // Ensure critical preference defaults are present in MMKV early
         SettingsManager.initApp(this)
+        SettingsManager.setNightMode()
 
-        // Initialize theme state from MMKV
-        ThemeManager.refresh()
+        es.dmoral.toasty.Toasty.Config.getInstance()
+            .setGravity(android.view.Gravity.BOTTOM, 0, 300)
+            .apply()
     }
 }

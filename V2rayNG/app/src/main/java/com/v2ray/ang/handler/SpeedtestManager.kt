@@ -13,11 +13,6 @@ import java.net.UnknownHostException
 
 object SpeedtestManager {
 
-    data class RemoteEndpointInfo(
-        val country: String?,
-        val ipAddress: String?,
-    )
-
     /**
      * Measures the time taken to establish a TCP connection to a given URL and port.
      *
@@ -53,7 +48,7 @@ object SpeedtestManager {
         return -1
     }
 
-    fun getRemoteIPInfo(): RemoteEndpointInfo? {
+    fun getRemoteIPInfo(): String? {
         val url = MmkvManager.decodeSettingsString(AppConfig.PREF_IP_API_URL)
             .takeIf { !it.isNullOrBlank() } ?: AppConfig.IP_API_URL
 
@@ -86,9 +81,6 @@ object SpeedtestManager {
             ipInfo.location?.country_code
         ).firstOrNull { !it.isNullOrBlank() }
 
-        return RemoteEndpointInfo(
-            country = country,
-            ipAddress = ip,
-        )
+        return "(${country ?: "unknown"}) ${ip ?: "unknown"}"
     }
 }
