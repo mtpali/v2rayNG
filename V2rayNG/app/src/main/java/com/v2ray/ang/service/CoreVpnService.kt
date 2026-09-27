@@ -34,7 +34,11 @@ import java.lang.ref.SoftReference
 class CoreVpnService : VpnService(), ServiceControl {
     private lateinit var mInterface: ParcelFileDescriptor
     @Volatile private var isRunning = false
+    @Volatile private var coreReady = false
     private val stopping = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val destroyed = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var networkRecovery = VpnNetworkRecoveryGate()
+    @Volatile private var defaultNetworkCallback: ConnectivityManager.NetworkCallback? = null
     private var tun2SocksService: Tun2SocksControl? = null
 
     /**destroy
@@ -51,28 +55,50 @@ class CoreVpnService : VpnService(), ServiceControl {
         NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .build()
     }
 
     private val connectivity by lazy { getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager }
 
-    @delegate:RequiresApi(Build.VERSION_CODES.P)
-    private val defaultNetworkCallback by lazy {
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun createNetworkCallback(gate: VpnNetworkRecoveryGate) =
         object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
+                if (stopping.get() || !gate.isActive()) return
                 setUnderlyingNetworks(arrayOf(network))
+                // A protected AWG UDP socket can remain on a stale physical network
+                // after Wi-Fi sleeps or hands over to cellular. Recreate it through
+                // the existing coordinated stop/restart path, once per service run.
+                if (gate.onAvailable(
+                        network.networkHandle,
+                        canRecoverAmnezia()
+                    )) {
+                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: Physical network changed; recovering Amnezia tunnel")
+                    recoverFromNetworkChange()
+                }
+            }
+
+            override fun onBlockedStatusChanged(network: Network, blocked: Boolean) {
+                // Android 10+ reports Doze network blocking on the same physical
+                // network. Reopen the Amnezia transport when access returns.
+                if (gate.onBlockedStatus(network.networkHandle, blocked, canRecoverAmnezia())) {
+                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: Physical network unblocked; recovering Amnezia tunnel")
+                    recoverFromNetworkChange()
+                }
             }
 
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
                 // it's a good idea to refresh capabilities
-                setUnderlyingNetworks(arrayOf(network))
+                if (!stopping.get() && gate.isCurrent(network.networkHandle)) {
+                    setUnderlyingNetworks(arrayOf(network))
+                }
             }
 
             override fun onLost(network: Network) {
-                setUnderlyingNetworks(null)
+                if (!stopping.get() && gate.isCurrent(network.networkHandle)) setUnderlyingNetworks(null)
             }
         }
-    }
 
     override fun onCreate() {
         super.onCreate()
@@ -93,10 +119,10 @@ class CoreVpnService : VpnService(), ServiceControl {
 //    }
 
     override fun onDestroy() {
+        destroyed.set(true)
+        stopAllService()
         super.onDestroy()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service destroyed")
-
-        stopAllService()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -104,9 +130,9 @@ class CoreVpnService : VpnService(), ServiceControl {
         NotificationManager.showNotification(null)
         if (stopping.get()) return START_NOT_STICKY
         if (isRunning && CoreServiceManager.isRunning()) return START_STICKY
-        setupVpnService()
+        if (!setupVpnService()) return START_NOT_STICKY
         startService()
-        return START_STICKY
+        return if (CoreServiceManager.isRunning()) START_STICKY else START_NOT_STICKY
         //return super.onStartCommand(intent, flags, startId)
     }
 
@@ -124,6 +150,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             stopAllService()
             return
         }
+        coreReady = true
 
         // Start LAN sharing if enabled in settings
         RootLanSharing.startClientSharing(this)
@@ -148,21 +175,22 @@ class CoreVpnService : VpnService(), ServiceControl {
      * Sets up the VPN service.
      * Prepares the VPN and configures it if preparation is successful.
      */
-    private fun setupVpnService() {
+    private fun setupVpnService(): Boolean {
         val prepare = prepare(this)
         if (prepare != null) {
             LogUtil.e(AppConfig.TAG, "StartCore-VPN: Permission not granted")
             stopSelf()
-            return
+            return false
         }
 
         if (configureVpnService() != true) {
             LogUtil.e(AppConfig.TAG, "StartCore-VPN: Configuration failed")
             stopSelf()
-            return
+            return false
         }
 
         runTun2socks()
+        return true
     }
 
     /**
@@ -259,7 +287,11 @@ class CoreVpnService : VpnService(), ServiceControl {
         // Android P (API 28) and above: Configure network callbacks
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
-                connectivity.requestNetwork(defaultNetworkRequest, defaultNetworkCallback)
+                val gate = VpnNetworkRecoveryGate()
+                val callback = createNetworkCallback(gate)
+                networkRecovery = gate
+                defaultNetworkCallback = callback
+                connectivity.requestNetwork(defaultNetworkRequest, callback)
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to request network", e)
             }
@@ -338,30 +370,64 @@ class CoreVpnService : VpnService(), ServiceControl {
         tun2SocksService?.startTun2Socks()
     }
 
-    private fun stopAllService(isForced: Boolean = true) {
+    private fun canRecoverAmnezia() = !stopping.get() && coreReady && CoreServiceManager.isAmneziaRunning()
+
+    private fun recoverFromNetworkChange() {
         if (!stopping.compareAndSet(false, true)) return
+        releaseVpnAndCore()
+    }
+
+    private fun stopAllService() {
+        networkRecovery.cancelRecovery()
+        if (!stopping.compareAndSet(false, true)) return
+        releaseVpnAndCore()
+    }
+
+    private fun releaseVpnAndCore() {
+        networkRecovery.stop()
+        coreReady = false
         isRunning = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
-                connectivity.unregisterNetworkCallback(defaultNetworkCallback)
+                defaultNetworkCallback?.let { connectivity.unregisterNetworkCallback(it) }
             } catch (e: Exception) {
                 LogUtil.w(AppConfig.TAG, "StopCore-VPN: Failed to unregister callback", e)
             }
+            defaultNetworkCallback = null
         }
         tun2SocksService?.stopTun2Socks()
         tun2SocksService = null
         RootLanSharing.stopClientSharing(this)
 
-        CoreServiceManager.stopCoreLoop {
+        val initiated = CoreServiceManager.stopCoreLoop(onStopped = {
             // Runs on the manager's IO shutdown scope. Closing this descriptor before
             // stopLoop returns can race native cleanup and a newly reused Android fd.
             try {
                 if (::mInterface.isInitialized) mInterface.close()
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "StopCore-VPN: Failed to close interface", e)
-            } finally {
-                if (isForced) stopSelf()
             }
+        }, onFinished = {
+            if (networkRecovery.takeRecovery() && !destroyed.get()) {
+                // Remain in the existing foreground VPN service: Android 12+ can
+                // reject a new foreground-service start from a background callback.
+                stopping.set(false)
+                NotificationManager.showNotification(null)
+                if (setupVpnService()) startService()
+            } else {
+                NotificationManager.cancelNotification()
+                stopSelf()
+            }
+        }, keepForeground = networkRecovery.recoveryRequested())
+        if (!initiated) {
+            LogUtil.e(AppConfig.TAG, "StopCore-VPN: Shutdown unavailable, stopping service")
+            NotificationManager.cancelNotification()
+            try {
+                if (::mInterface.isInitialized) mInterface.close()
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "StopCore-VPN: Failed to close interface after shutdown failure", e)
+            }
+            stopSelf()
         }
     }
 }

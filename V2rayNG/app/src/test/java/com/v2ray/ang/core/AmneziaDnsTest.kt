@@ -50,4 +50,25 @@ class AmneziaDnsTest {
         assertEquals(listOf("172.16.0.2/32"), settings.address)
         assertNull(settings.dnsServers)
     }
+
+    @Test fun idleKeepaliveAppliesOnlyToAmneziaWithoutAnExplicitValue() {
+        val awg = profile("")
+        val peer = { CoreOutboundBuilder.toOutboundWireguard(awg, true)!!.settings!!.peers!!.first() }
+        assertEquals(25, peer().keepAlive)
+
+        awg.keepAlive = 45
+        assertEquals(45, peer().keepAlive)
+
+        awg.keepAlive = 0
+        assertEquals(0, peer().keepAlive)
+
+        awg.keepAlive = null
+        awg.awgKeepAliveRange = "25-35"
+        assertNull(peer().keepAlive)
+        assertEquals("25-35", peer().keepAliveRange)
+
+        awg.awgKeepAliveRange = null
+        awg.isAmneziaWG = false
+        assertNull(peer().keepAlive)
+    }
 }

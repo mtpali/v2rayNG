@@ -129,10 +129,10 @@ object NotificationManager {
     /**
      * Cancels the notification.
      */
-    fun cancelNotification() {
-        getService()?.stopForeground(Service.STOP_FOREGROUND_REMOVE)
+    fun cancelNotification(keepForeground: Boolean = false) {
+        if (!keepForeground) getService()?.stopForeground(Service.STOP_FOREGROUND_REMOVE)
 
-        mBuilder = null
+        if (!keepForeground) mBuilder = null
         statsScope?.cancel()
         statsScope = null
         speedNotificationJob = null

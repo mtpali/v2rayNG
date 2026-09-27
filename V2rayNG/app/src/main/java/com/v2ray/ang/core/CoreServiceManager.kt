@@ -48,7 +48,7 @@ object CoreServiceManager {
 
     private val coreController: CoreController = CoreNativeManager.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
-    private var currentConfig: ProfileItem? = null
+    @Volatile private var currentConfig: ProfileItem? = null
     private var stoppingScope: CoroutineScope? = null
     private val stopGate = CoreStopGate()
     @Volatile private var restartContext: Context? = null
@@ -122,6 +122,9 @@ object CoreServiceManager {
      * @return True if the service is running, false otherwise.
      */
     fun isRunning() = coreController.isRunning
+
+    /** Daemon-owned state used by the VPN service when its physical network changes. */
+    fun isAmneziaRunning() = coreController.isRunning && currentConfig?.isAmneziaWG == true
 
     /**
      * Gets the name of the currently running server.
@@ -309,13 +312,17 @@ object CoreServiceManager {
      * Unregisters broadcast receivers, stops notifications, and shuts down plugins.
      * @return True if the core was stopped successfully, false otherwise.
      */
-    fun stopCoreLoop(onStopped: (() -> Unit)? = null): Boolean {
+    fun stopCoreLoop(
+        onStopped: (() -> Unit)? = null,
+        onFinished: (() -> Unit)? = null,
+        keepForeground: Boolean = false,
+    ): Boolean {
         val service = getService() ?: return false
         if (!stopGate.begin(onStopped)) return true
 
         // Stop sampling before releasing the core; only acknowledge stop after its
         // sockets and tunnel have actually closed, never after an arbitrary delay.
-        NotificationManager.cancelNotification()
+        NotificationManager.cancelNotification(keepForeground)
         try {
             service.unregisterReceiver(mMsgReceive)
         } catch (e: Exception) {
@@ -354,6 +361,11 @@ object CoreServiceManager {
                 if (stopped) {
                     MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
                     withContext(Dispatchers.Main) {
+                        try {
+                            onFinished?.invoke()
+                        } catch (e: Exception) {
+                            LogUtil.e(AppConfig.TAG, "StopCore-Manager: VPN recovery after cleanup failed", e)
+                        }
                         val restart = restartContext
                         restartContext = null
                         if (restart != null) startVService(restart)

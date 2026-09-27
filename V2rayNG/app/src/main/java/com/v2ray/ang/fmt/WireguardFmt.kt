@@ -117,7 +117,9 @@ object WireguardFmt : FmtBase() {
         config.preSharedKey = peerParams["presharedkey"]?.nullIfBlank()
         config.allowedIPs = peerParams["allowedips"]?.takeIf { it.isNotBlank() }
             ?: "0.0.0.0/0,::/0"
-        config.keepAlive = peerParams["persistentkeepalive"]?.toIntOrNull()?.takeIf { it > 0 }
+        // Keep zero distinct from an absent setting so an Amnezia peer can opt out
+        // of the mobile idle default without changing the exported configuration.
+        config.keepAlive = peerParams["persistentkeepalive"]?.toIntOrNull()?.takeIf { it >= 0 }
         parseEndpoint(peerParams["endpoint"].orEmpty()).also {
             config.server = it.first
             config.serverPort = it.second
@@ -266,7 +268,7 @@ object WireguardFmt : FmtBase() {
             appendLine("AllowedIPs = ${it.replace('\n', ',')}")
         }
         (config.awgKeepAliveRange?.takeIf { config.isAmneziaWG }
-            ?: config.keepAlive?.takeIf { it > 0 }?.toString())?.let {
+            ?: config.keepAlive?.takeIf { it > 0 || (config.isAmneziaWG && it == 0) }?.toString())?.let {
             appendLine("PersistentKeepalive = $it")
         }
         config.reserved?.takeIf { it.isNotBlank() && it != "0,0,0" }?.let {

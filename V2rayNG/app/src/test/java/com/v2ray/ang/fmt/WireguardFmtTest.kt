@@ -176,6 +176,13 @@ class WireguardFmtTest {
         assertNull(legacy.awgKeepAliveRange)
     }
     @Test
+    fun explicitZeroKeepaliveSurvivesAmneziaExportAndReimport() {
+        val source = amneziaConfig.replace("PersistentKeepalive = 25", "PersistentKeepalive = 0")
+        val profile = WireguardFmt.parseWireguardConfFile(source)
+        assertEquals(0, profile.keepAlive)
+        assertEquals(0, WireguardFmt.parseAmneziaWG(WireguardFmt.exportUri(profile))!!.keepAlive)
+    }
+    @Test
     fun preservesProfileDnsAcrossImportStorageAndUri() {
         val source = amneziaConfig.replace("MTU = 1380", "DNS = 100.64.0.1, 8.8.4.4\nDNS = 2001:db8::53\nMTU = 1380")
         val profile = WireguardFmt.parseWireguardConfFile(source)

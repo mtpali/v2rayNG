@@ -277,7 +277,10 @@ object CoreOutboundBuilder {
                 peer.publicKey = profileItem.publicKey.orEmpty()
                 peer.preSharedKey = profileItem.preSharedKey?.nullIfBlank()
                 peer.endpoint = Utils.getIpv6Address(profileItem.server) + ":${profileItem.serverPort}"
-                peer.keepAlive = profileItem.keepAlive?.takeIf { it > 0 }
+                // A mobile AmneziaWG peer without PersistentKeepalive can lose its UDP
+                // NAT mapping while the screen is off. Preserve every supplied interval.
+                peer.keepAlive = profileItem.keepAlive?.takeIf { it > 0 || (profileItem.isAmneziaWG && it == 0) }
+                    ?: if (profileItem.isAmneziaWG && profileItem.awgKeepAliveRange.isNullOrBlank()) 25 else null
                 peer.keepAliveRange = profileItem.awgKeepAliveRange?.takeIf { profileItem.isAmneziaWG && it.isNotBlank() }
                 peer.allowedIPs = profileItem.allowedIPs
                     ?.split(',', '\n')
