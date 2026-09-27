@@ -80,6 +80,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             }
 
             override fun onBlockedStatusChanged(network: Network, blocked: Boolean) {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
                 // Android 10+ reports Doze network blocking on the same physical
                 // network. Reopen the Amnezia transport when access returns.
                 if (gate.onBlockedStatus(network.networkHandle, blocked, canRecoverAmnezia())) {
@@ -96,7 +97,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             }
 
             override fun onLost(network: Network) {
-                if (!stopping.get() && gate.isCurrent(network.networkHandle)) setUnderlyingNetworks(null)
+                if (!stopping.get() && gate.onLost(network.networkHandle)) setUnderlyingNetworks(null)
             }
         }
 

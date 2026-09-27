@@ -46,4 +46,12 @@ class VpnNetworkRecoveryGateTest {
         gate.stop()
         assertFalse(gate.onBlockedStatus(1L, false, true))
     }
+
+    @Test fun losingAndRegainingTheSameNetworkReopensTheTransport() {
+        val gate = VpnNetworkRecoveryGate()
+        assertFalse(gate.onAvailable(1L, true))
+        assertFalse(gate.onLost(2L))
+        assertTrue(gate.onLost(1L))
+        assertTrue(gate.onAvailable(1L, true))
+    }
 }

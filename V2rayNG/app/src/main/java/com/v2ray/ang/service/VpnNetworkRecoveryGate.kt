@@ -3,21 +3,29 @@ package com.v2ray.ang.service
 /** Tracks physical-network handovers for one VPN service instance. */
 internal class VpnNetworkRecoveryGate {
     private var lastNetwork: Long? = null
+    private var lost = false
     private var restartRequested = false
     private var blocked = false
     private var stopped = false
 
     @Synchronized fun onAvailable(network: Long, canRestart: Boolean): Boolean {
         if (stopped) return false
-        val changed = lastNetwork != null && lastNetwork != network
+        val changed = lastNetwork != null && (lastNetwork != network || lost)
         if (changed) blocked = false
         lastNetwork = network
+        lost = false
         if (!changed || !canRestart || restartRequested) return false
         restartRequested = true
         return true
     }
 
     @Synchronized fun isCurrent(network: Long): Boolean = !stopped && lastNetwork == network
+
+    @Synchronized fun onLost(network: Long): Boolean {
+        if (stopped || lastNetwork != network) return false
+        lost = true
+        return true
+    }
 
     @Synchronized fun onBlockedStatus(network: Long, isBlocked: Boolean, canRestart: Boolean): Boolean {
         if (stopped || lastNetwork != network) return false
