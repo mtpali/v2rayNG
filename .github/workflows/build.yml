@@ -140,6 +140,14 @@ jobs:
               echo "Unexpected ABI in $APK_PATH" >&2
               exit 1
             fi
+            VERSION_CODE=$("$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK_PATH" \
+              | sed -n "s/^package: name='[^']*' versionCode='\([0-9]*\)'.*/\1/p")
+            test -n "$VERSION_CODE"
+            if [ "$ABI" = armeabi-v7a ]; then
+              ARMV7_CODE=$VERSION_CODE
+            else
+              test "$VERSION_CODE" -gt "$ARMV7_CODE"
+            fi
           done
 
       - name: Upload ARMv7 F-Droid APK
