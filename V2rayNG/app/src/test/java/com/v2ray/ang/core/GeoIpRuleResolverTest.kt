@@ -1,8 +1,8 @@
 package com.v2ray.ang.core
 
 import com.v2ray.ang.AppConfig
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 class GeoIpRuleResolverTest {
     private val source = listOf(AppConfig.GEOIP_PRIVATE, AppConfig.GEOIP_CN, "1.1.1.1")

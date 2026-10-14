@@ -14,8 +14,9 @@ awg_patch="$repo_root/core/patches/amneziawg-go-s4.patch"
 awg_module="github.com/amnezia-vpn/amneziawg-go/v3"
 awg_version="v3.1.20260828"
 output_aar="$(realpath -m "$1")"
-core_module="github.com/autorepobot/xray-core"
-core_version="v0.0.0-20260704054728-50c452881eb9"
+core_module="github.com/xtls/xray-core"
+core_version="$(awk '$1 == "github.com/xtls/xray-core" { print $2; exit }' "$android_lib/go.mod")"
+[[ -n "$core_version" ]]
 task_dir="$(mktemp -d)"
 patched_core="$task_dir/xray-core"
 patched_awg="$task_dir/amneziawg-go"
@@ -29,6 +30,7 @@ trap cleanup EXIT
 
 command -v go >/dev/null
 command -v gomobile >/dev/null
+command -v protoc >/dev/null
 command -v patch >/dev/null
 [[ -d "$android_lib" ]]
 [[ -s "$core_patch" ]]
@@ -56,7 +58,16 @@ patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
 (
     cd "$patched_core"
     GOWORK=off go mod edit "-replace=$awg_module=$patched_awg"
-    GOWORK=off go test ./infra/conf -run 'TestAmneziaWG' -count=1
+    GOWORK=off go mod edit "-require=$awg_module@$awg_version"
+    GOWORK=off go mod edit "-require=golang.zx2c4.com/wireguard@v0.0.0-20260522210424-ecfc5a8d5446"
+    GOWORK=off go mod tidy
+    protobuf_version="$(awk '$1 == "google.golang.org/protobuf" { print $2; exit }' go.mod)"
+    GOWORK=off go install "google.golang.org/protobuf/cmd/protoc-gen-go@$protobuf_version"
+    export PATH="$(go env GOPATH)/bin:$PATH"
+    # Preserve upstream remoteDNS field 10; regenerate descriptors after adding AWG fields.
+    protoc --proto_path=. --go_out=. --go_opt=paths=source_relative proxy/wireguard/config.proto
+    gofmt -w infra/conf/wireguard*.go proxy/wireguard/*.go
+    GOWORK=off go test ./infra/conf -run 'TestAmneziaWG|TestWireGuard' -count=1
     GOWORK=off go test ./proxy/wireguard -count=1
     # Stress teardown and packet delivery under the host race detector.
     GOWORK=off go test -race ./proxy/wireguard -run TestAmneziaWG -skip TestAmneziaWGProtectedHandshake -count=10 -timeout=90s

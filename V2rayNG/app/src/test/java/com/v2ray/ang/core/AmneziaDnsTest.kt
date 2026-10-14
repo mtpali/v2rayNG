@@ -1,8 +1,8 @@
 package com.v2ray.ang.core
 
 import com.v2ray.ang.fmt.WireguardFmt
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 
 class AmneziaDnsTest {
     private fun profile(dns: String) = WireguardFmt.parseWireguardConfFile("""

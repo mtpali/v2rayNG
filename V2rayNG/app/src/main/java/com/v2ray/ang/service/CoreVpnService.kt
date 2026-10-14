@@ -7,8 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.net.ConnectivityManager
 import android.net.Network
+import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.ProxyInfo
@@ -26,12 +26,12 @@ import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.contracts.Tun2SocksControl
 import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.root.RootLanSharing
 import com.v2ray.ang.util.LogUtil
-import com.v2ray.ang.util.MyContextWrapper
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +39,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.CancellationException
 import java.lang.ref.SoftReference
+import java.util.concurrent.atomic.AtomicBoolean
 
 @SuppressLint("VpnServicePolicy")
 class CoreVpnService : VpnService(), ServiceControl {
@@ -51,7 +55,9 @@ class CoreVpnService : VpnService(), ServiceControl {
     @Volatile private var networkRecovery = VpnNetworkRecoveryGate()
     @Volatile private var defaultNetworkCallback: ConnectivityManager.NetworkCallback? = null
     private var tun2SocksService: Tun2SocksControl? = null
+    private val isStartingLock = AtomicBoolean(false)
     private val wakeRecoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var setupJob: Job? = null
     private var wakeReceiverRegistered = false
     private val wakeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -95,7 +101,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
     }
 
-    /**destroy
+    /**
      * Unfortunately registerDefaultNetworkCallback is going to return our VPN interface: https://android.googlesource.com/platform/frameworks/base/+/dda156ab0c5d66ad82bdcf76cda07cbc0a9c8a2e
      *
      * This makes doing a requestNetwork with REQUEST necessary so that we don't get ALL possible networks that
@@ -183,12 +189,30 @@ class CoreVpnService : VpnService(), ServiceControl {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service command received")
         if (stopping.get()) return START_NOT_STICKY
-        NotificationManager.showNotification(null)
+        NotificationManager.ensureForeground()
         if (isRunning && CoreServiceManager.isRunning()) return START_STICKY
-        if (!setupVpnService()) return START_NOT_STICKY
-        startService()
-        return if (CoreServiceManager.isRunning()) START_STICKY else START_NOT_STICKY
-        //return super.onStartCommand(intent, flags, startId)
+        if (!tryLockStart()) return START_NOT_STICKY
+        beginSetup()
+        return START_NOT_STICKY
+    }
+
+    private fun beginSetup() {
+        setupJob = wakeRecoveryScope.launch {
+            try {
+                if (!setupVpnService() || stopping.get()) {
+                    stopAllService()
+                } else {
+                    startService()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                LogUtil.e(AppConfig.TAG, "StartCore-VPN: setup failed", error)
+                stopAllService()
+            } finally {
+                unlockStart()
+            }
+        }
     }
 
     override fun getService(): Service {
@@ -221,10 +245,12 @@ class CoreVpnService : VpnService(), ServiceControl {
         return protect(socket)
     }
 
+    override fun setUnderlyingNetworks(networks: Array<Network>?): Boolean {
+        return super<VpnService>.setUnderlyingNetworks(networks)
+    }
+
     override fun attachBaseContext(newBase: Context?) {
-        val context = newBase?.let {
-            MyContextWrapper.wrap(newBase, SettingsManager.getLocale())
-        }
+        val context = newBase?.let(AppLocaleManager::localizedContext)
         super.attachBaseContext(context)
     }
 
@@ -346,7 +372,8 @@ class CoreVpnService : VpnService(), ServiceControl {
         val gate = VpnNetworkRecoveryGate()
         networkRecovery = gate
         // Android P (API 28) and above: Configure network callbacks
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val selected = MmkvManager.getSelectServer()?.let(MmkvManager::decodeServerConfig)
+        if (selected?.isAmneziaWG == true && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
                 val callback = createNetworkCallback(gate)
                 defaultNetworkCallback = callback
@@ -488,11 +515,13 @@ class CoreVpnService : VpnService(), ServiceControl {
             }
             defaultNetworkCallback = null
         }
-        tun2SocksService?.stopTun2Socks()
-        tun2SocksService = null
-        RootLanSharing.stopClientSharing(this)
-
-        val initiated = CoreServiceManager.stopCoreLoop(onStopped = {
+        val pendingSetup = setupJob
+        val initiated = CoreServiceManager.stopCoreLoop(beforeStop = {
+            pendingSetup?.cancelAndJoin()
+            tun2SocksService?.stopTun2Socks()
+            tun2SocksService = null
+            RootLanSharing.stopClientSharing(this)
+        }, onStopped = {
             // Runs on the manager's IO shutdown scope. Closing this descriptor before
             // stopLoop returns can race native cleanup and a newly reused Android fd.
             try {
@@ -506,7 +535,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                 // reject a new foreground-service start from a background callback.
                 stopping.set(false)
                 NotificationManager.showNotification(null)
-                if (setupVpnService()) startService()
+                if (tryLockStart()) beginSetup()
             } else {
                 NotificationManager.cancelNotification()
                 stopSelf()
@@ -527,5 +556,15 @@ class CoreVpnService : VpnService(), ServiceControl {
             }
             stopSelf()
         }
+    }
+
+    fun tryLockStart(): Boolean {
+        LogUtil.w(AppConfig.TAG, "StartCore-VPN: tryLockStart: ${isStartingLock.get()}")
+        return isStartingLock.compareAndSet(false, true)
+    }
+
+    fun unlockStart() {
+        isStartingLock.set(false)
+        LogUtil.w(AppConfig.TAG, "StartCore-VPN: unlockStart")
     }
 }

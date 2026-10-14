@@ -3,8 +3,8 @@ package com.v2ray.ang.core
 import com.google.gson.Gson
 import com.v2ray.ang.dto.entities.ProfileTraffic
 import com.v2ray.ang.dto.entities.TrafficSnapshot
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 
 class ProfileTrafficTest {
     @Test fun unusedAndResetProfilesHaveNoVisibleUsage() {

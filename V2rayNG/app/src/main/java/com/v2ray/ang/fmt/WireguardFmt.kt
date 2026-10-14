@@ -38,6 +38,8 @@ object WireguardFmt : FmtBase() {
         config.publicKey = queryParam["publickey"].orEmpty()
         config.preSharedKey = queryParam["presharedkey"]?.nullIfBlank()
         config.mtu = Utils.parseInt(queryParam["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
+        config.remoteDNS = queryParam["dns"] ?: AppConfig.WIREGUARD_LOCAL_REMOTE_DNS
+        config.finalMask = (queryParam["fm"] ?: queryParam["finalmask"])?.nullIfBlank()
         config.reserved = queryParam["reserved"]?.nullIfBlank()
         config.allowedIPs = queryParam["allowedips"]
         config.keepAlive = queryParam["keepalive"]?.toIntOrNull()?.takeIf { it > 0 }
@@ -127,6 +129,10 @@ object WireguardFmt : FmtBase() {
         config.reserved = peerParams["reserved"]?.nullIfBlank()
 
         config.isAmneziaWG = forceAmnezia || interfaceParams.keys.any(amneziaKeys::contains)
+        config.remoteDNS = interfaceDns.joinToString(", ").nullIfBlank()
+            ?: AppConfig.WIREGUARD_LOCAL_REMOTE_DNS.takeUnless { config.isAmneziaWG }
+        config.finalMask = (peerParams["finalmask"] ?: peerParams["fm"]
+            ?: interfaceParams["finalmask"] ?: interfaceParams["fm"])?.nullIfBlank()
         config.awgKeepAliveRange = peerParams["persistentkeepalive"]
             ?.takeIf { config.isAmneziaWG && it.contains('-') }
         if (config.isAmneziaWG) {
@@ -199,6 +205,8 @@ object WireguardFmt : FmtBase() {
             query["allowedips"] = it.removeWhiteSpace().orEmpty()
         }
         config.keepAlive?.takeIf { it > 0 }?.let { query["keepalive"] = it.toString() }
+        config.remoteDNS?.nullIfBlank()?.let { query["dns"] = it.removeWhiteSpace().orEmpty() }
+        config.finalMask?.nullIfBlank()?.let { query["fm"] = it }
         return toUri(config, config.secretKey, query)
     }
 
@@ -228,6 +236,8 @@ object WireguardFmt : FmtBase() {
             .forEach { appendLine("Address = $it") }
         config.mtu?.let { appendLine("MTU = $it") }
 
+        if (!config.isAmneziaWG) appendValue("DNS", config.remoteDNS)
+        appendValue("FinalMask", config.finalMask)
         if (config.isAmneziaWG) {
             appendValue("DNS", config.awgDns)
             appendInt("Jc", config.awgJc)

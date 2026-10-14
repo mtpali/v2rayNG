@@ -1,7 +1,7 @@
 package com.v2ray.ang.service
 
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 
 class VpnNetworkRecoveryGateTest {
     @Test fun firstNetworkAndDuplicateCallbacksDoNotRestart() {

@@ -1,8 +1,8 @@
 package com.v2ray.ang.core
 
 import com.v2ray.ang.handler.SettingsManager
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 import java.util.Locale
 
 class EnglishLocaleTest {
