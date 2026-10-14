@@ -16,7 +16,7 @@ import com.v2ray.ang.util.LogUtil
 import java.io.Serializable
 
 object MessageHelper {
-
+    const val EXTRA_REQUEST_ID = "requestId"
 
     /**
      * Sends a message to the service.
@@ -67,8 +67,8 @@ object MessageHelper {
      * @param what The message identifier.
      * @param content The message content.
      */
-    fun sendMsg2UI(ctx: Context, what: Int, content: Serializable) {
-        sendMsg(ctx, AppConfig.BROADCAST_ACTION_ACTIVITY, what, content)
+    fun sendMsg2UI(ctx: Context, what: Int, content: Serializable, requestId: String? = null) {
+        sendMsg(ctx, AppConfig.BROADCAST_ACTION_ACTIVITY, what, content, requestId)
     }
 
     /**
@@ -77,18 +77,15 @@ object MessageHelper {
      * @param ctx The context.
      * @param message The test service message containing key, subscriptionId, and serverGuids.
      */
-    fun sendMsg2TestService(ctx: Context, message: TestServiceMessage) {
+    fun sendMsg2TestService(ctx: Context, message: TestServiceMessage, requestId: String? = null) {
         try {
             val intent = Intent()
             intent.component = ComponentName(ctx, CoreTestService::class.java)
             intent.putExtra("content", message)
+            requestId?.let { intent.putExtra(EXTRA_REQUEST_ID, it) }
             when (message.key) {
                 AppConfig.MSG_MEASURE_CONFIG_START -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        ContextCompat.startForegroundService(ctx, intent)
-                    } else {
-                        ctx.startService(intent)
-                    }
+                    ctx.startService(intent)
                 }
 
                 AppConfig.MSG_MEASURE_CONFIG_CANCEL -> {
@@ -102,6 +99,9 @@ object MessageHelper {
             }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to send message to test service", e)
+            if (message.key == AppConfig.MSG_MEASURE_CONFIG_START) {
+                sendMsg2UI(ctx, AppConfig.MSG_MEASURE_CONFIG_CANCEL, "", requestId)
+            }
         }
     }
 
@@ -146,9 +146,11 @@ object MessageHelper {
      * @param what The message identifier.
      * @param content The message content.
      */
-    private fun sendMsg(ctx: Context, action: String, what: Int, content: Serializable) {
+    private fun sendMsg(ctx: Context, action: String, what: Int, content: Serializable, requestId: String? = null) {
         try {
-            ctx.sendBroadcast(messageIntent(action, what, content))
+            ctx.sendBroadcast(messageIntent(action, what, content).apply {
+                requestId?.let { putExtra(EXTRA_REQUEST_ID, it) }
+            })
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to send message with action: $action", e)
         }

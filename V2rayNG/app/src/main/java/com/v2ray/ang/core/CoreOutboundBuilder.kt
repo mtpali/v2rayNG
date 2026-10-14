@@ -29,7 +29,8 @@ object CoreOutboundBuilder {
             EConfigType.SOCKS -> toOutboundSocks(profileItem)
             EConfigType.VLESS -> toOutboundVless(profileItem)
             EConfigType.TROJAN -> toOutboundTrojan(profileItem)
-            EConfigType.WIREGUARD -> toOutboundWireguard(profileItem)
+            EConfigType.WIREGUARD -> toOutboundWireguard(profileItem,
+                MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED))
             EConfigType.HYSTERIA2 -> toOutboundHysteria2(profileItem)
             EConfigType.HTTP -> toOutboundHttp(profileItem)
             else -> null
@@ -235,33 +236,95 @@ object CoreOutboundBuilder {
         return outboundBean
     }
 
-    private fun toOutboundWireguard(profileItem: ProfileItem): OutboundBean? {
+    internal fun toOutboundWireguard(profileItem: ProfileItem, ipv6Enabled: Boolean): OutboundBean? {
         val outboundBean = createInitOutbound(EConfigType.WIREGUARD)
 
         val rawAddresses = profileItem.localAddress
-            ?.split(",")
+            ?.split(',', '\n')
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }
             ?.ifEmpty { null }
             ?: listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4)
 
-        val addresses = if (MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true) {
+        val addresses = if (ipv6Enabled) {
             rawAddresses
         } else {
             val ipv4Addresses = rawAddresses.filter { !it.contains(":") }
             ipv4Addresses.ifEmpty { listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4) }
         }
 
+        // Old custom profiles only stored awgDns; new editor changes use remoteDNS.
+        val profileDns = profileItem.remoteDNS ?: profileItem.awgDns.takeIf { profileItem.isAmneziaWG }
+        val rawDNS = profileDns
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.ifEmpty { null }
+            ?: listOf(AppConfig.WIREGUARD_LOCAL_REMOTE_DNS)
+
+        val remotes = if (ipv6Enabled) {
+            rawDNS
+        } else {
+            val ipv4Dns = rawDNS.filter { !it.contains(":") }
+            ipv4Dns.ifEmpty { listOf(AppConfig.WIREGUARD_LOCAL_REMOTE_DNS) }
+        }
+
         outboundBean?.settings?.let { wireguard ->
             wireguard.secretKey = profileItem.secretKey
             wireguard.address = addresses
+            wireguard.port = null
             wireguard.peers?.firstOrNull()?.let { peer ->
                 peer.publicKey = profileItem.publicKey.orEmpty()
                 peer.preSharedKey = profileItem.preSharedKey?.nullIfBlank()
                 peer.endpoint = Utils.getIpv6Address(profileItem.server) + ":${profileItem.serverPort}"
+                // A mobile AmneziaWG peer without PersistentKeepalive can lose its UDP
+                // NAT mapping while the screen is off. Preserve every supplied interval.
+                peer.keepAlive = profileItem.keepAlive?.takeIf { it > 0 || (profileItem.isAmneziaWG && it == 0) }
+                    ?: if (profileItem.isAmneziaWG && profileItem.awgKeepAliveRange.isNullOrBlank()) 25 else null
+                peer.keepAliveRange = profileItem.awgKeepAliveRange?.takeIf { profileItem.isAmneziaWG && it.isNotBlank() }
+                peer.allowedIPs = profileItem.allowedIPs
+                    ?.split(',', '\n')
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotEmpty() }
+                    ?.ifEmpty { null }
             }
             wireguard.mtu = profileItem.mtu
+            wireguard.remoteDNS = remotes
             wireguard.reserved = profileItem.reserved?.takeIf { it.isNotBlank() }?.split(",")?.filter { it.isNotBlank() }?.map { it.trim().toInt() }
+            if (profileItem.isAmneziaWG) {
+                wireguard.dnsServers = profileDns?.split(',', '\n')
+                    ?.map { it.trim() }
+                    ?.filter { Utils.isPureIpAddress(it) }
+                    ?.distinct()
+                    ?.ifEmpty { null }
+                wireguard.amnezia = OutboundBean.OutSettingsBean.AmneziaWGOptionsBean(
+                    jc = profileItem.awgJc,
+                    jmin = profileItem.awgJmin,
+                    jmax = profileItem.awgJmax,
+                    s1 = profileItem.awgS1,
+                    s2 = profileItem.awgS2,
+                    s3 = profileItem.awgS3,
+                    s4 = profileItem.awgS4,
+                    h1 = profileItem.awgH1?.takeIf { it.isNotBlank() },
+                    h2 = profileItem.awgH2?.takeIf { it.isNotBlank() },
+                    h3 = profileItem.awgH3?.takeIf { it.isNotBlank() },
+                    h4 = profileItem.awgH4?.takeIf { it.isNotBlank() },
+                    i1 = profileItem.awgI1?.takeIf { it.isNotBlank() },
+                    i2 = profileItem.awgI2?.takeIf { it.isNotBlank() },
+                    i3 = profileItem.awgI3?.takeIf { it.isNotBlank() },
+                    i4 = profileItem.awgI4?.takeIf { it.isNotBlank() },
+                    i5 = profileItem.awgI5?.takeIf { it.isNotBlank() },
+                    headerProtectionKey = profileItem.awgHeaderProtectionKey?.takeIf { it.isNotBlank() },
+                    contentPaddingAddition = profileItem.awgContentPaddingAddition?.takeIf { it.isNotBlank() },
+                    rekeyAfterTime = profileItem.awgRekeyAfterTime?.takeIf { it.isNotBlank() },
+                    rekeyTimeout = profileItem.awgRekeyTimeout?.takeIf { it.isNotBlank() },
+                    rejectAfterTime = profileItem.awgRejectAfterTime?.takeIf { it.isNotBlank() },
+                    keepaliveTimeout = profileItem.awgKeepaliveTimeout?.takeIf { it.isNotBlank() },
+                    maxHandshakeAttempts = profileItem.awgMaxHandshakeAttempts?.takeIf { it.isNotBlank() },
+                    randomizePacketTrailers = profileItem.awgRandomizePacketTrailers,
+                    disableCookieReplies = profileItem.awgDisableCookieReplies,
+                )
+            }
         }
 
         if (!profileItem.finalMask.isNullOrBlank()) {

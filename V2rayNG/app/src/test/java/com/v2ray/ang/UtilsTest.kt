@@ -1,10 +1,10 @@
 package com.v2ray.ang
 
 import com.v2ray.ang.util.Utils
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 /**
  * Example local unit test, which will execute on the development machine (host).
@@ -57,6 +57,30 @@ class UtilsTest {
 
         assertFalse(Utils.isIpInCidr("invalid-ip", "192.168.1.0/24"))
         assertFalse(Utils.isIpInCidr("192.168.1.1", "invalid-cidr"))
+    }
+
+    @Test
+    fun bracketedEndpointsDoNotChangePureAddressValidation() {
+        assertTrue(Utils.isIpAddress("[::1]:443"))
+        assertFalse(Utils.isPureIpAddress("[::1]:443"))
+        assertTrue(Utils.isPureIpAddress("::1"))
+        assertTrue(Utils.isPureIpAddress("[::1]"))
+        assertFalse(Utils.isPureIpAddress("[::1]garbage"))
+        assertFalse(Utils.isIpAddress("[::1]:65536"))
+        assertFalse(Utils.isIpAddress("[::1]:invalid"))
+        assertFalse(Utils.isIpAddress("[::1]garbage"))
+        assertFalse(Utils.isIpAddress("[::1"))
+    }
+
+    @Test
+    fun cidrBoundsAndInvalidInputsDoNotRequireDnsOrAndroidLogging() {
+        assertTrue(Utils.isIpInCidr("203.0.113.1", "0.0.0.0/0"))
+        assertTrue(Utils.isIpInCidr("203.0.113.1", "203.0.113.1/32"))
+        assertFalse(Utils.isIpInCidr("203.0.113.2", "203.0.113.1/32"))
+        assertFalse(Utils.isIpInCidr("203.0.113.1", "203.0.113.0/33"))
+        assertFalse(Utils.isIpInCidr("203.0.113.1", "203.0.113.0/-1"))
+        assertFalse(Utils.isIpInCidr("203.0.113.1", "example.invalid/24"))
+        assertFalse(Utils.isIpInCidr("::1", "::/0"))
     }
 
 }

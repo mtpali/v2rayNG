@@ -14,6 +14,9 @@
     <string name="pull_down_to_refresh">Please pull down to refresh!</string>
 
     <!-- Notifications -->
+    <string name="notification_channel_service">v2rayNG service</string>
+    <string name="notification_channel_subscription_updates">Subscription updates</string>
+    <string name="notification_channel_connection_checks">Connection checks</string>
     <string name="notification_action_stop_v2ray">Stop</string>
     <string name="toast_permission_denied">Permission denied</string>
     <string name="toast_permission_denied_notification">Notification permission denied</string>
@@ -50,7 +53,7 @@
     <string name="confirm_delete_proxy_chain_member">Are you sure you want to delete this chain member?</string>
     <string name="confirm_delete_routing_rule">Are you sure you want to delete this routing rule?</string>
     <string name="confirm_delete_subscription_group">Are you sure you want to delete this subscription group?</string>
-    <string name="confirm_delete_asset_file">Are you sure you want to delete the asset file \"%1$s\"?</string>
+    <string name="confirm_delete_asset_file">Are you sure you want to delete this asset file?</string>
     <string name="confirm_delete_asset_source">Are you sure you want to delete this asset source?</string>
     <string name="server_lab_remarks">remarks</string>
     <string name="server_lab_address">address</string>
@@ -100,6 +103,7 @@
     <string name="server_lab_reserved">Reserved (optional, separated by commas)</string>
     <string name="server_lab_local_address">Local address (optional IPv4/IPv6, separated by commas)</string>
     <string name="server_lab_local_mtu">MTU (optional, default 1420)</string>
+    <string name="server_lab_remote_dns">remoteDNS (optional, comma-separated IPv4/IPv6)</string>
     <string name="server_lab_kcp_mtu">mKCP MTU (optional, default 1350)</string>
     <string name="server_lab_kcp_tti">mKCP TTI (optional, default 50 ms)</string>
     <string name="toast_success">Success</string>
@@ -312,7 +316,7 @@
     <string name="title_root_mode_enabled">Enable root mode (root users)</string>
     <string name="summary_root_mode_enabled">Use root access for low-level transparent proxying. Root mode handles network traffic directly instead of using the Android VPN service. Standard mode, per-app routing, and VPN-related settings do not apply while root mode is enabled.</string>
     <string name="toast_root_required">Root access is required for this feature</string>
-    <string name="title_root_lan_sharing">Share VPN with LAN / tethered devices (root users)</string>
+    <string name="title_root_lan_sharing">VPN Hotspot</string>
     <string name="summary_root_lan_sharing">Route traffic from Wi-Fi hotspot and USB-tethered devices through the VPN.</string>
 
     <string name="title_logcat" translatable="false">Logcat</string>
@@ -351,8 +355,14 @@
     <string name="title_del_config_count">Delete %d configs</string>
     <string name="title_import_config_count">Import %d configs</string>
     <string name="title_export_config_count">Export %d configs</string>
-    <string name="title_update_config_count">Update %d configs</string>
-    <string name="title_update_asset_count">Updated %d asset files</string>
+    <plurals name="title_update_config_count">
+        <item quantity="one">Updated %1$d config</item>
+        <item quantity="other">Updated %1$d configs</item>
+    </plurals>
+    <plurals name="title_update_asset_count">
+        <item quantity="one">Updated %1$d asset file</item>
+        <item quantity="other">Updated %1$d asset files</item>
+    </plurals>
     <string name="title_update_subscription_result">Updated %1$d configs (%2$d success, %3$d failed, %4$d skipped)</string>
     <string name="title_update_subscription_no_subscription">No subscriptions</string>
     <string name="toast_server_not_found_in_group">Selected server not found in current group</string>
@@ -551,4 +561,15 @@
     <string name="connection_test_empty_message">no details available</string>
     <string name="value_unknown">unknown</string>
 
+    <string name="toast_services_stop_failure">Failed to stop service</string>
+    <string name="title_rename_configs">Rename Configs</string>
+    <string name="hint_profile_name_prefix">Profile name prefix</string>
+    <string name="toast_select_subscription_group">Select a subscription group first</string>
+    <string name="toast_profile_name_prefix_required">Enter a profile name prefix</string>
+    <string name="toast_profiles_renamed">Renamed %1$d profiles</string>
+    <string name="title_clear_traffic">Clear traffic usage</string>
+    <string name="confirm_clear_traffic">Reset traffic usage for all profiles?</string>
+    <string name="profile_traffic_usage">↑ %1$s · ↓ %2$s</string>
+    <string name="vpn_hotspot_on">On</string>
+    <string name="vpn_hotspot_off">Off</string>
 </resources>

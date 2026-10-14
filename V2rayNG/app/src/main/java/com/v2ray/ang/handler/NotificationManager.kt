@@ -1,7 +1,6 @@
 package com.v2ray.ang.handler
 
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
@@ -9,19 +8,24 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Build
+import android.os.PowerManager
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.dto.entities.ProfileItem
-import com.v2ray.ang.extension.delay
 import com.v2ray.ang.extension.toSpeedString
+import com.v2ray.ang.helper.NotificationHelper
 import com.v2ray.ang.ui.main.MainActivity
+import com.v2ray.ang.service.CoreVpnService
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -35,6 +39,8 @@ object NotificationManager {
     private const val QUERY_INTERVAL_MS = 3000L
 
     private var lastQueryTime = 0L
+    private var statsScope: CoroutineScope? = null
+    @Volatile private var displaySpeed = true
     private var mBuilder: NotificationCompat.Builder? = null
     private var speedNotificationJob: Job? = null
     private var mNotificationManager: NotificationManager? = null
@@ -43,15 +49,28 @@ object NotificationManager {
      * Starts the speed notification.
      * @param currentConfig The current profile configuration.
      */
+    @Synchronized
     fun startSpeedNotification() {
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) != true) return
-        if (speedNotificationJob != null || CoreServiceManager.isRunning() == false) return
+        displaySpeed = MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) == true
+        if (speedNotificationJob != null || !CoreServiceManager.canSampleTraffic()) return
+        // MobileTinaVPN does not poll the native core while the screen is off.
+        // Keep that idle behavior for Amnezia; Xray's counters retain the bytes
+        // until the next sample or the final flush during shutdown.
+        val power = getService()?.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (getService() is CoreVpnService && CoreServiceManager.isAmneziaProfile() && power?.isInteractive == false) return
 
         var lastZeroSpeed = false
 
-        speedNotificationJob = CoroutineScope(Dispatchers.IO).launch {
-            while (isActive) {
-                lastZeroSpeed = updateSpeedNotificationOnce(lastZeroSpeed)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        statsScope = scope
+        speedNotificationJob = scope.launch {
+            while (isActive && CoreServiceManager.canSampleTraffic()) {
+                try {
+                    lastZeroSpeed = updateSpeedNotificationOnce(lastZeroSpeed)
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    LogUtil.e(AppConfig.TAG, "Daemon traffic sample failed", e)
+                }
                 delay(QUERY_INTERVAL_MS)
             }
         }
@@ -129,12 +148,13 @@ object NotificationManager {
     /**
      * Cancels the notification.
      */
-    fun cancelNotification() {
-        val service = getService() ?: return
-        service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
+    @Synchronized
+    fun cancelNotification(keepForeground: Boolean = false) {
+        if (!keepForeground) getService()?.stopForeground(Service.STOP_FOREGROUND_REMOVE)
 
-        mBuilder = null
-        speedNotificationJob?.cancel()
+        if (!keepForeground) mBuilder = null
+        statsScope?.cancel()
+        statsScope = null
         speedNotificationJob = null
         mNotificationManager = null
     }
@@ -142,11 +162,15 @@ object NotificationManager {
     /**
      * Stops the speed notification.
      */
+    @Synchronized
     fun stopSpeedNotification() {
-        speedNotificationJob?.let {
-            it.cancel()
+        // The native counters retain Amnezia traffic while the screen is off;
+        // the next sample or shutdown flush persists it.
+        displaySpeed = false
+        if (getService() is CoreVpnService && CoreServiceManager.isAmneziaProfile()) {
+            statsScope?.cancel()
+            statsScope = null
             speedNotificationJob = null
-            updateNotification("", 0, 0)
         }
     }
 
@@ -157,12 +181,17 @@ object NotificationManager {
     @RequiresApi(Build.VERSION_CODES.O)
     private fun createNotificationChannel(): String {
         val channelId = AppConfig.RAY_NG_CHANNEL_ID
-        val channelName = AppConfig.RAY_NG_CHANNEL_NAME
-        // Foreground-service notifications must remain visible; LOW is silent but valid.
-        val chan = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
-        chan.lightColor = Color.DKGRAY
-        chan.lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-        getNotificationManager()?.createNotificationChannel(chan)
+        val service = getService() ?: return channelId
+        NotificationHelper.ensureNotificationChannel(
+            context = service,
+            channelId = channelId,
+            channelNameRes = R.string.notification_channel_service,
+            // Foreground-service notifications must remain visible; LOW is silent but valid.
+            importance = NotificationManager.IMPORTANCE_LOW,
+        ) {
+            lightColor = Color.DKGRAY
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+        }
         return channelId
     }
 
@@ -261,7 +290,7 @@ object NotificationManager {
         val proxyTotal = proxyUplink + proxyDownlink
         val directTotal = directUplink + directDownlink
         val zeroSpeed = proxyTotal + directTotal == 0L
-        if (!zeroSpeed || !lastZeroSpeed) {
+        if (displaySpeed && (!zeroSpeed || !lastZeroSpeed)) {
             val text = StringBuilder()
             appendSpeedString(
                 text, AppConfig.TAG_PROXY,

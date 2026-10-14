@@ -21,6 +21,7 @@ import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.PackageUidResolver
 import com.v2ray.ang.util.Utils
+import java.io.File
 
 object CoreConfigManager {
     private var initConfigCache: String? = null
@@ -207,6 +208,8 @@ object CoreConfigManager {
         configureDns(configContext, v2rayConfig, policyGroupBalancerTags)
         configureLocalDns(configContext, v2rayConfig)
         configureRootModeDns(v2rayConfig)
+        // Profile DNS belongs to the WireGuard netstack. Keep bootstrap DNS and
+        // routing intact: resolving a peer hostname through that same peer deadlocks.
 
         // (added by getDns / getCustomLocalDns) to use the balancer, then add
         // the catch-all balancer rule.
@@ -229,7 +232,7 @@ object CoreConfigManager {
         }
 
         applyObservability(v2rayConfig, balancerStrategies)
-        applySpeedDisabled(v2rayConfig)
+        enableTrafficCounters(v2rayConfig)
         resolveOutboundDomainsToHosts(v2rayConfig)
 
         return v2rayConfig
@@ -413,13 +416,7 @@ object CoreConfigManager {
             "${AppConfig.TAG_BALANCER_PRE}-${resolvedOutbound.tag}"
         }
         val strategyType = BalancerStrategyType.from(resolvedOutbound.profile.policyGroupType)
-        val fallbackTag = if (strategyType.supportsObservatory && resolvedOutbound.profile.policyGroupTestOutbounds != false) {
-            resolvedOutbound.profile.policyGroupFallbackTag
-                ?.takeIf { it.isNotEmpty() && it != AppConfig.TAG_PROXY }
-            // Xray excludes dead random/roundRobin candidates only when fallbackTag is set;
-            // without this default, an enabled empty field creates no observatory.
-                ?: membersToAdd.first().tag
-        } else null
+        val fallbackTag = resolvePolicyGroupFallbackTag(strategyType, resolvedOutbound.profile, membersToAdd.first().tag)
         val strategy = buildBalancerStrategy(
             strategyType = strategyType,
             selector = listOf(memberTagPrefix),
@@ -434,6 +431,27 @@ object CoreConfigManager {
         balancerStrategies.add(strategy)
         policyGroupBalancerTags[resolvedOutbound.tag] = balancerTag
     }
+
+    internal fun resolvePolicyGroupFallbackTag(
+        strategyType: BalancerStrategyType,
+        profile: ProfileItem,
+        firstMemberTag: String,
+    ): String? {
+        if (strategyType.requiresObservatory || strategyType.requiresBurstObservatory) {
+            // Missing or failed probes must not let a matched rule use Xray's default outbound.
+            return firstMemberTag
+        }
+        return if (strategyType.supportsObservatory && profile.policyGroupTestOutbounds != false) {
+            profile.policyGroupFallbackTag
+                ?.takeIf { it.isNotEmpty() && it != AppConfig.TAG_PROXY }
+            // Xray excludes dead random/roundRobin candidates only when fallbackTag is set;
+            // without this default, an enabled empty field creates no observatory.
+                ?: firstMemberTag
+        } else null
+    }
+
+    internal fun shouldUseStandardObservatory(strategyType: BalancerStrategyType, fallbackTag: String?): Boolean =
+        strategyType.requiresObservatory || (strategyType.supportsObservatory && fallbackTag != null)
 
     /**
      * Trim runtime sections that are not needed for latency testing.
@@ -710,13 +728,18 @@ object CoreConfigManager {
     }
 
     /**
-     * Remove speed-test runtime sections when the feature is disabled.
+     * Enable runtime counters regardless of notification speed visibility.
      */
-    private fun applySpeedDisabled(v2rayConfig: V2rayConfig) {
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) != true) {
-            v2rayConfig.stats = null
-            v2rayConfig.policy?.system = null
-        }
+    private fun enableTrafficCounters(v2rayConfig: V2rayConfig) {
+        // Traffic accounting is independent of whether notification speed is visible.
+        v2rayConfig.stats = v2rayConfig.stats ?: emptyMap<String, Any>()
+        val policy = v2rayConfig.policy ?: V2rayConfig.PolicyBean(levels = emptyMap())
+        val system = (policy.system as? Map<*, *>)?.entries
+            ?.associate { it.key.toString() to it.value }?.toMutableMap() ?: mutableMapOf()
+        system["statsOutboundUplink"] = true
+        system["statsOutboundDownlink"] = true
+        policy.system = system
+        v2rayConfig.policy = policy
     }
 
     /*
@@ -1181,17 +1204,16 @@ object CoreConfigManager {
 
         val rule = JsonUtil.fromJson(JsonUtil.toJson(item), V2rayConfig.RoutingBean.RulesBean::class.java) ?: return
 
-        // Replace specific geoip rules with ext versions
+        // Prefer the compact CN/private database when it is installed. Fresh installs do not
+        // bundle this optional file, so keeping the built-in geoip:cn/private rules is the safe
+        // fallback and prevents Xray from rejecting the entire routing configuration.
         rule.ip?.let { ipList ->
-            val updatedIpList = ArrayList<String>()
-            ipList.forEach { ip ->
-                when (ip) {
-                    AppConfig.GEOIP_CN -> updatedIpList.add("ext:${AppConfig.GEOIP_ONLY_CN_PRIVATE_DAT}:cn")
-                    AppConfig.GEOIP_PRIVATE -> updatedIpList.add("ext:${AppConfig.GEOIP_ONLY_CN_PRIVATE_DAT}:private")
-                    else -> updatedIpList.add(ip)
-                }
-            }
-            rule.ip = updatedIpList
+            val compactGeoIp = File(
+                Utils.userAssetPath(context),
+                AppConfig.GEOIP_ONLY_CN_PRIVATE_DAT
+            )
+            val compactGeoIpAvailable = compactGeoIp.isFile && compactGeoIp.length() >= 64L * 1024L
+            rule.ip = GeoIpRuleResolver.resolve(ipList, compactGeoIpAvailable)
         }
 
         if (SettingsManager.canUseProcessRouting()) {
@@ -1249,7 +1271,7 @@ object CoreConfigManager {
             fallbackTag = fallbackTag,
             strategy = V2rayConfig.RoutingBean.StrategyObject(type = strategyType.policyGroupType)
         )
-        val observatory = if (strategyType.requiresObservatory || fallbackTag != null) {
+        val observatory = if (shouldUseStandardObservatory(strategyType, fallbackTag)) {
             V2rayConfig.ObservatoryObject(
                 subjectSelector = selector,
                 probeUrl = probeUrl,

@@ -13,8 +13,8 @@ android {
         applicationId = "com.v2ray.ang"
         minSdk = 24
         targetSdk = 37
-        versionCode = 747
-        versionName = "2.3.7"
+        versionCode = 751
+        versionName = "2.3.11"
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {
@@ -27,11 +27,10 @@ android {
                     include(
                         "arm64-v8a",
                         "armeabi-v7a",
-                        "x86_64",
-                        "x86"
+
                     )
                 }
-                isUniversalApk = abiFilterList.isNullOrEmpty()
+                isUniversalApk = false
             }
         }
 
@@ -40,7 +39,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -85,7 +86,7 @@ android {
         if (isFdroid) {
             val versionCodes =
                 mapOf(
-                    "armeabi-v7a" to 2, "arm64-v8a" to 1, "x86" to 4, "x86_64" to 3, "universal" to 0
+                    "armeabi-v7a" to 2, "arm64-v8a" to 5, "x86" to 4, "x86_64" to 3, "universal" to 0
                 )
 
             variant.outputs
@@ -130,22 +131,23 @@ android {
 
     androidResources {
         generateLocaleConfig = true
-        localeFilters += listOf(
-            "en",
-            "zh-rCN",
-            "zh-rTW",
-            "vi",
-            "ru",
-            "fa",
-            "ar",
-            "bn",
-            "bqi-rIR"
-        )
+        localeFilters += listOf("en")
     }
 
     packaging {
         jniLibs {
             useLegacyPackaging = true
+        }
+    }
+
+    testOptions {
+        unitTests.all {
+            it.useJUnitPlatform()
+            // Treat Jupiter discovery warnings as failures: JUnit 4 failed on an invalid @Test
+            // method, such as one that returns a value, while Jupiter only warns and skips it.
+            // The key is @API(status = EXPERIMENTAL) in JUnit 6; after a JUnit upgrade, check
+            // that a temporary `@Test fun probe() = 1` still fails the unit test task.
+            it.systemProperty("junit.platform.discovery.issue.severity.critical", "WARNING")
         }
     }
 
@@ -201,10 +203,12 @@ dependencies {
     implementation(libs.reorderable)
 
     // Testing Libraries
-    testImplementation(libs.junit)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    testImplementation(libs.org.mockito.mockito.inline)
+    testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 }

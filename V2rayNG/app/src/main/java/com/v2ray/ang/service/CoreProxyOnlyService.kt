@@ -10,9 +10,23 @@ import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.util.LogUtil
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import java.lang.ref.SoftReference
 
 class CoreProxyOnlyService : Service(), ServiceControl {
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var setupJob: Job? = null
+    private val stopping = AtomicBoolean(false)
+    @Volatile private var ready = false
+
     /**
      * Initializes the service.
      */
@@ -30,35 +44,32 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      * @return The start mode.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (stopping.get()) return START_NOT_STICKY
         NotificationManager.ensureForeground()
-        LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service command received")
-
-        if (CoreServiceManager.isRunning()) {
-            LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Core is already running")
-            return START_STICKY
+        if (ready && CoreServiceManager.isRunning()) return START_STICKY
+        if (setupJob?.isActive == true) return START_NOT_STICKY
+        setupJob = serviceScope.launch {
+            try {
+                if (!CoreServiceManager.startCoreLoop(null)) {
+                    stopService()
+                } else {
+                    ready = true
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                LogUtil.e(AppConfig.TAG, "Service setup failed: proxy", error)
+                stopService()
+            }
         }
-
-        if (!CoreServiceManager.startCoreLoop(null)) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Proxy: Failed to start core loop")
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
-    /**
-     * Destroys the service.
-     */
     override fun onDestroy() {
+        stopService()
         super.onDestroy()
-        CoreServiceManager.stopCoreLoop()
     }
 
-    /**
-     * Gets the service instance.
-     * @return The service instance.
-     */
     override fun getService(): Service {
         return this
     }
@@ -74,7 +85,16 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      * Stops the service.
      */
     override fun stopService() {
-        stopSelf()
+        if (!stopping.compareAndSet(false, true)) return
+        ready = false
+        val pendingSetup = setupJob
+        CoreServiceManager.stopCoreLoop(
+            beforeStop = {
+                pendingSetup?.cancelAndJoin()
+            },
+            onFinished = { serviceScope.cancel(); stopSelf() },
+            onFailed = { serviceScope.cancel(); stopSelf() },
+        )
     }
 
     /**

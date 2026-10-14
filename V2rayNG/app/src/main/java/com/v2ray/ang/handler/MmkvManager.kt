@@ -20,12 +20,14 @@ import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.dto.entities.AssetUrlCache
 import com.v2ray.ang.dto.entities.AssetUrlItem
 import com.v2ray.ang.dto.entities.ProfileItem
+import com.v2ray.ang.extension.isGroupType
 import com.v2ray.ang.dto.entities.RulesetItem
 import com.v2ray.ang.dto.entities.ServerAffiliationInfo
 import com.v2ray.ang.dto.entities.SubscriptionCache
 import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.dto.entities.WebDavConfig
 import com.v2ray.ang.util.JsonUtil
+import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -34,6 +36,34 @@ import kotlinx.coroutines.flow.drop
 internal class ProfileStorageException(message: String) : IllegalStateException(message)
 
 object MmkvManager {
+    private val trafficStorage by lazy { MMKV.mmkvWithID("PROFILE_TRAFFIC", MMKV.MULTI_PROCESS_MODE) }
+
+    fun readTraffic(): com.v2ray.ang.dto.entities.TrafficSnapshot =
+        trafficStorage.decodeString("snapshot")?.let {
+            JsonUtil.fromJsonSafe(it, com.v2ray.ang.dto.entities.TrafficSnapshot::class.java)
+        } ?: com.v2ray.ang.dto.entities.TrafficSnapshot()
+
+    fun addTraffic(guid: String, generation: String, up: Long, down: Long): Boolean {
+        trafficStorage.lock()
+        try {
+            val state = readTraffic()
+            if (state.generation != generation) return false
+            val previous = state.profiles[guid] ?: com.v2ray.ang.dto.entities.ProfileTraffic()
+            state.profiles[guid] = previous.add(up, down)
+            check(trafficStorage.encode("snapshot", JsonUtil.toJson(state)))
+            return true
+        } finally { trafficStorage.unlock() }
+    }
+
+    fun clearTraffic() {
+        trafficStorage.lock()
+        try {
+            // One atomic record prevents partial resets and stale sampler writes.
+            val empty = com.v2ray.ang.dto.entities.TrafficSnapshot(java.util.UUID.randomUUID().toString())
+            check(trafficStorage.encode("snapshot", JsonUtil.toJson(empty)))
+        } finally { trafficStorage.unlock() }
+    }
+
 
     //region private
 
@@ -349,7 +379,9 @@ object MmkvManager {
             val serverList = if (append) {
                 decodeServerList(subscriptionId)
             } else {
-                mutableListOf()
+                replacedServers.filter { guid ->
+                    decodeServerConfig(guid)?.configType?.isGroupType() == true
+                }.toMutableList()
             }
             val indexedServers = serverList.toHashSet()
             profiles.keys.forEach { guid ->
@@ -373,12 +405,52 @@ object MmkvManager {
             val referencedByOtherGroups = decodeServersReferencedByOtherGroups(subscriptionId)
             val removablePayloads = ProfileReplacement.findRemovablePayloads(
                 replacedServers = replacedServers,
-                replacementServers = profiles.keys,
+                replacementServers = serverList.toSet(),
                 protectedServer = protectedServer,
                 serversReferencedByOtherGroups = referencedByOtherGroups,
             )
             removeProfilePayloads(removablePayloads)
         }
+    }
+
+    /** Renames every existing profile in a group and restores earlier writes on failure. */
+    @Synchronized
+    fun renameServerProfiles(serverIds: List<String>, prefix: String): Int {
+        val originals = linkedMapOf<String, String>()
+        val profiles = serverIds.distinct().mapNotNull { guid ->
+            val raw = profileFullStorage.decodeString(guid) ?: return@mapNotNull null
+            val profile = JsonUtil.fromJsonSafe(raw, ProfileItem::class.java)
+                ?: return@mapNotNull null
+            originals[guid] = raw
+            guid to profile
+        }
+        val renamed = ProfileBatchRenamer.plan(prefix, profiles)
+        val written = mutableListOf<String>()
+
+        try {
+            renamed.forEach { (guid, profile) ->
+                // Preserve unknown serialized fields from newer app versions during a rename.
+                val json = com.google.gson.JsonParser.parseString(originals.getValue(guid)).asJsonObject
+                json.addProperty("remarks", profile.remarks)
+                written += guid
+                check(profileFullStorage.encode(guid, json.toString())) {
+                    "Profile rename storage write failed"
+                }
+            }
+        } catch (error: Exception) {
+            val rollbackFailures = written.count { guid ->
+                profileFullStorage.encode(guid, originals.getValue(guid)).not()
+            }
+            if (rollbackFailures > 0) {
+                LogUtil.e(
+                    "MmkvManager",
+                    "Failed to roll back $rollbackFailures profile rename writes",
+                    error,
+                )
+            }
+            throw error
+        }
+        return renamed.size
     }
 
     /**

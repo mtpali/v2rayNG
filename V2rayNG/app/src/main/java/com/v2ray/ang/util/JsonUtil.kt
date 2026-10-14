@@ -2,17 +2,34 @@ package com.v2ray.ang.util
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonDeserializer
 import com.google.gson.JsonObject
+import com.google.gson.JsonParseException
 import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
+import com.google.gson.ToNumberPolicy
 import com.google.gson.reflect.TypeToken
 import com.v2ray.ang.AppConfig
+import com.v2ray.ang.dto.entities.ProfileItem
+import com.v2ray.ang.enums.EConfigType
 import java.lang.reflect.Type
 
 object JsonUtil {
-    private var gson = Gson()
+    private val profileGson = Gson()
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(ProfileItem::class.java, JsonDeserializer<ProfileItem> { json, _, context ->
+            val source = json.asJsonObject
+            val configType = context.deserialize<EConfigType>(source.get("configType"), EConfigType::class.java)
+                ?: throw JsonParseException("Missing or unsupported profile type")
+            // Gson's Unsafe allocation skips Kotlin defaults for absent legacy fields.
+            // Seed only missing values; every field supplied by the stored profile wins.
+            val defaults = profileGson.toJsonTree(ProfileItem.create(configType)).asJsonObject
+            source.entrySet().forEach { (name, value) -> defaults.add(name, value) }
+            profileGson.fromJson(defaults, ProfileItem::class.java)
+        })
+        .create()
 
     /**
      * Converts an object to its JSON representation.
@@ -64,12 +81,15 @@ object JsonUtil {
         val gsonPre = GsonBuilder()
             .setPrettyPrinting()
             .disableHtmlEscaping()
+            .setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE)
             .registerTypeAdapter( // custom serializer is needed here since JSON by default parse number as Double, core will fail to start
                 object : TypeToken<Double>() {}.type,
                 JsonSerializer { src: Double?, _: Type?, _: JsonSerializationContext? ->
-                    JsonPrimitive(
-                        src?.toInt()
-                    )
+                    when (src) {
+                        null -> null
+                        src.toLong().toDouble() -> JsonPrimitive(src.toLong())
+                        else -> JsonPrimitive(src)
+                    }
                 }
             )
             .create()

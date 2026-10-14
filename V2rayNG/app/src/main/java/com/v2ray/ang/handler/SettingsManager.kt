@@ -387,6 +387,11 @@ object SettingsManager {
     }
 
     /**
+     * Get the locale used by this English-only distribution.
+     */
+    fun getLocale(): java.util.Locale = java.util.Locale.ENGLISH
+
+    /**
      * Retrieves the currently selected VPN interface address configuration.
      * This method reads the user's preference for VPN interface addressing and returns
      * the corresponding configuration containing IPv4 and IPv6 addresses.

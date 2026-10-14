@@ -21,6 +21,15 @@ object AppLocaleManager {
      * Migrates the existing MMKV language preference and restores it before the first activity.
      */
     fun initialize(context: Context) {
+        persistLegacyPreference(Language.ENGLISH)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val manager = context.getSystemService(LocaleManager::class.java)
+            if (manager.applicationLocales.toLanguageTags() != "en") {
+                manager.applicationLocales = android.os.LocaleList(java.util.Locale.ENGLISH)
+            }
+        } else {
+            AppCompatDelegate.setApplicationLocales(Language.ENGLISH.toLocaleList())
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Api33.prepareMigration(context)
         } else {
@@ -43,7 +52,7 @@ object AppLocaleManager {
      * Applies a language selected in the app and lets AppCompat recreate the current activity.
      */
     fun setApplicationLanguage(languageCode: String) {
-        val language = Language.fromCode(languageCode)
+        val language = Language.ENGLISH
         persistLegacyPreference(language)
         AppCompatDelegate.setApplicationLocales(language.toLocaleList())
     }
@@ -78,12 +87,10 @@ object AppLocaleManager {
         }
     }
 
-    private fun storedLanguage(): Language = Language.fromCode(
-        MmkvManager.decodeSettingsString(AppConfig.PREF_LANGUAGE) ?: Language.AUTO.code
-    )
+    private fun storedLanguage(): Language = Language.ENGLISH
 
     private fun syncLegacyPreference(languageTag: String?) {
-        persistLegacyPreference(Language.fromLanguageTag(languageTag))
+        persistLegacyPreference(Language.ENGLISH)
     }
 
     private fun persistLegacyPreference(language: Language) {

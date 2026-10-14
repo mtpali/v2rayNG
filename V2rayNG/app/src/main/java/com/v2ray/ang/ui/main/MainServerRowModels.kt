@@ -14,6 +14,7 @@ internal data class ServerRowUiModel(
     val typeDescription: String,
     val testDelayMillis: Long,
     val subscriptionBadge: String,
+    val traffic: com.v2ray.ang.dto.entities.ProfileTraffic = com.v2ray.ang.dto.entities.ProfileTraffic(),
 )
 
 internal data class ServerGroupUiState(
@@ -24,10 +25,12 @@ internal data class ServerGroupUiState(
 internal fun buildServerRowUiModel(
     server: ServersCache,
     subscriptionRemarks: String,
+    traffic: com.v2ray.ang.dto.entities.ProfileTraffic = com.v2ray.ang.dto.entities.ProfileTraffic(),
 ): ServerRowUiModel {
     val profile = server.profile
     return ServerRowUiModel(
         guid = server.guid,
+        traffic = traffic,
         profile = profile,
         remarks = profile.remarks,
         statistics = profile.description.nullIfBlank()

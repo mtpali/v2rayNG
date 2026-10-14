@@ -26,6 +26,7 @@ data class MainUiState(
     val locateTarget: LocateTarget? = null,
     val confirmRemove: Boolean = false,
     val doubleColumnDisplay: Boolean = false,
+    val vpnHotspotEnabled: Boolean = false,
     val shareQRCodeBitmap: android.graphics.Bitmap? = null
 )
 
@@ -45,6 +46,9 @@ sealed interface MainAction {
     data object RemoveInvalidServers : MainAction
     data object SortByTestResults : MainAction
     data object UpdateSubscriptions : MainAction
+    data object ToggleVpnHotspot : MainAction
+    data object ClearTraffic : MainAction
+    data class RenameConfigs(val groupId: String, val prefix: String) : MainAction
     data object ExportAll : MainAction
 
     data object ImportQRcode : MainAction

@@ -147,6 +147,20 @@ object Utils {
                 }
             }
 
+            // Bracketed IPv6 endpoints may include a port, while isPureIpAddress
+            // must continue to reject endpoint strings.
+            if (addr.startsWith("[")) {
+                val closingBracket = addr.indexOf(']')
+                if (closingBracket <= 1) return false
+                val suffix = addr.substring(closingBracket + 1)
+                if (suffix.isNotEmpty()) {
+                    if (!suffix.startsWith(":")) return false
+                    val port = suffix.drop(1).toIntOrNull() ?: return false
+                    if (port !in 0..65535) return false
+                }
+                addr = addr.substring(1, closingBracket)
+            }
+
             // Handle IPv4-mapped IPv6 addresses
             if (addr.startsWith("::ffff:") && '.' in addr) {
                 addr = addr.drop(7)
@@ -214,7 +228,7 @@ object Utils {
         var addr = value
         if (addr.startsWith("[")) {
             val closingBracket = addr.lastIndexOf(']')
-            if (closingBracket <= 1) return false
+            if (closingBracket <= 1 || closingBracket != addr.lastIndex) return false
             addr = addr.substring(1, closingBracket)
         }
         return IPV6_REGEX.matches(addr)

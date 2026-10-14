@@ -27,12 +27,11 @@ private enum class ImportMenuAction(@StringRes val labelRes: Int, val action: Ma
 }
 
 enum class MainMoreMenuAction(@StringRes val labelRes: Int) {
-    RestartService(R.string.title_service_restart),
+    ClearTraffic(R.string.title_clear_traffic),
     DeleteAll(R.string.title_del_all_config),
     DeleteDuplicate(R.string.title_del_duplicate_config),
     DeleteInvalid(R.string.title_del_invalid_config),
     ExportAll(R.string.title_export_all),
-    LocateSelected(R.string.title_locate_selected_config),
     SortByTestResults(R.string.title_sort_by_test_results),
     TestAll(R.string.title_ping_all_server),
     TestAllRealPing(R.string.title_real_ping_all_server),
@@ -79,7 +78,7 @@ fun ShareMethodDialog(
     more: Boolean,
     onDismiss: () -> Unit,
     onAction: (MainAction) -> Unit,
-    onRemove: (String) -> Unit,
+    onRemove: (String, String) -> Unit,
 ) {
     val menuActions = serverMenuActions(
         isComplexProfile = profile.configType.isComplexType(),
@@ -95,7 +94,7 @@ fun ShareMethodDialog(
                 ServerMenuAction.ShareClipboard -> onAction(MainAction.ShareClipboard(guid))
                 ServerMenuAction.ShareFullContent -> onAction(MainAction.ShareFullContent(guid))
                 ServerMenuAction.Edit -> onAction(MainAction.EditServer(guid, profile))
-                ServerMenuAction.Delete -> onRemove(guid)
+                ServerMenuAction.Delete -> onRemove(guid, profile.remarks)
             }
         },
         onDismiss = onDismiss

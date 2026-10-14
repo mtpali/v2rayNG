@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -54,14 +55,23 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     var showSearch by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var showClearTraffic by rememberSaveable { mutableStateOf(false) }
+    var renameGroupId by rememberSaveable { mutableStateOf<String?>(null) }
+    var renamePrefix by rememberSaveable { mutableStateOf("") }
     var showDelAllConfirm by remember { mutableStateOf(false) }
     var showDelDuplicateConfirm by remember { mutableStateOf(false) }
     var showDelInvalidConfirm by remember { mutableStateOf(false) }
-    var showRemoveConfirm by remember { mutableStateOf<String?>(null) }
+    var showRemoveConfirm by rememberSaveable(stateSaver = ServerDeleteTarget.Saver) {
+        mutableStateOf<ServerDeleteTarget?>(null)
+    }
 
     var shareTarget by remember { mutableStateOf<Triple<String, ProfileItem, Boolean>?>(null) }
-    val removeServer: (String) -> Unit = { guid ->
-        if (confirmRemove) showRemoveConfirm = guid else onAction(MainAction.RemoveServer(guid))
+    val removeServer: (String, String) -> Unit = { guid, profileName ->
+        if (confirmRemove) {
+            showRemoveConfirm = ServerDeleteTarget(guid, profileName)
+        } else {
+            onAction(MainAction.RemoveServer(guid))
+        }
     }
 
     val pagerState = rememberPagerState(
@@ -100,6 +110,24 @@ fun MainScreen(
             }
     }
 
+    if (showClearTraffic) {
+        com.v2ray.ang.ui.compose.DeleteConfirmDialog(
+            message = androidx.compose.ui.res.stringResource(com.v2ray.ang.R.string.confirm_clear_traffic),
+            onConfirm = { showClearTraffic = false; onAction(MainAction.ClearTraffic) },
+            onDismiss = { showClearTraffic = false }
+        )
+    }
+    renameGroupId?.let { groupId ->
+        RenameConfigsDialog(
+            prefix = renamePrefix,
+            onPrefixChange = { renamePrefix = it },
+            onConfirm = {
+                onAction(MainAction.RenameConfigs(groupId, renamePrefix))
+                if (renamePrefix.isNotBlank()) renameGroupId = null
+            },
+            onDismiss = { renameGroupId = null }
+        )
+    }
     MainDialogs(
         showDelAllConfirm = showDelAllConfirm,
         onDismissDelAll = { showDelAllConfirm = false },
@@ -135,9 +163,14 @@ fun MainScreen(
         drawerContent = {
             MainDrawerContent(
                 drawerState = drawerState,
+                vpnHotspotEnabled = uiState.vpnHotspotEnabled,
                 onNavigate = { route ->
                     scope.launch { drawerState.close() }
-                    onNavigate(route)
+                    when (route) {
+                        MainDestination.RenameConfigs -> { renamePrefix = ""; renameGroupId = uiState.selectedGroupId }
+                        MainDestination.VpnHotspot -> onAction(MainAction.ToggleVpnHotspot)
+                        else -> onNavigate(route)
+                    }
                 }
             )
         }
@@ -163,12 +196,11 @@ fun MainScreen(
                     onAction = onAction,
                     onMoreMenuAction = { action ->
                         when (action) {
-                            MainMoreMenuAction.RestartService -> onAction(MainAction.RestartService)
+                            MainMoreMenuAction.ClearTraffic -> showClearTraffic = true
                             MainMoreMenuAction.DeleteAll -> showDelAllConfirm = true
                             MainMoreMenuAction.DeleteDuplicate -> showDelDuplicateConfirm = true
                             MainMoreMenuAction.DeleteInvalid -> showDelInvalidConfirm = true
                             MainMoreMenuAction.ExportAll -> onAction(MainAction.ExportAll)
-                            MainMoreMenuAction.LocateSelected -> onAction(MainAction.LocateSelectedServer)
                             MainMoreMenuAction.SortByTestResults -> onAction(MainAction.SortByTestResults)
                             MainMoreMenuAction.TestAll -> onAction(MainAction.TestAllServers)
                             MainMoreMenuAction.TestAllRealPing -> onAction(MainAction.TestRealAllServers)
@@ -211,6 +243,11 @@ fun MainScreen(
                         )
                     }
 
+                    SubscriptionRefreshContainer(
+                        isRefreshing = isLoading,
+                        enabled = uiState.selectedGroupId.isNotEmpty(),
+                        onRefresh = { onAction(MainAction.UpdateSubscriptions) }
+                    ) {
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
@@ -245,6 +282,7 @@ fun MainScreen(
                                 bottom = 80.dp
                             )
                         )
+                    }
                     }
                 }
             }

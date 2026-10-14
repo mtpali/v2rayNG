@@ -57,10 +57,16 @@ interface MainDataSource : Closeable {
     fun share2Clipboard(guid: String): Boolean
 
     fun sendMsg2Service(msgId: Int, content: String)
-    fun sendMsg2TestService(msg: TestServiceMessage)
+    fun sendMsg2TestService(msg: TestServiceMessage, requestId: String? = null)
     fun cancelAllPing()
-    fun testCurrentServerRealPing()
+    fun testCurrentServerRealPing(requestId: String)
 
     fun syncSubscriptions()
+    fun getProfileTraffic(): Map<String, com.v2ray.ang.dto.entities.ProfileTraffic> = emptyMap()
+    fun clearProfileTraffic() {}
+    fun renameProfiles(groupId: String, prefix: String): Int = 0
+    fun isVpnHotspotEnabled(): Boolean = false
+    fun setVpnHotspotEnabled(enabled: Boolean): Boolean = false
+
     fun initAssets()
 }
