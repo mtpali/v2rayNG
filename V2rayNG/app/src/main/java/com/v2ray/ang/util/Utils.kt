@@ -228,7 +228,7 @@ object Utils {
         var addr = value
         if (addr.startsWith("[")) {
             val closingBracket = addr.lastIndexOf(']')
-            if (closingBracket <= 1) return false
+            if (closingBracket <= 1 || closingBracket != addr.lastIndex) return false
             addr = addr.substring(1, closingBracket)
         }
         return IPV6_REGEX.matches(addr)

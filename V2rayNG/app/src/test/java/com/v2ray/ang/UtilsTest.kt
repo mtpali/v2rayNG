@@ -63,6 +63,9 @@ class UtilsTest {
     fun bracketedEndpointsDoNotChangePureAddressValidation() {
         assertTrue(Utils.isIpAddress("[::1]:443"))
         assertFalse(Utils.isPureIpAddress("[::1]:443"))
+        assertTrue(Utils.isPureIpAddress("::1"))
+        assertTrue(Utils.isPureIpAddress("[::1]"))
+        assertFalse(Utils.isPureIpAddress("[::1]garbage"))
         assertFalse(Utils.isIpAddress("[::1]:65536"))
         assertFalse(Utils.isIpAddress("[::1]:invalid"))
         assertFalse(Utils.isIpAddress("[::1]garbage"))

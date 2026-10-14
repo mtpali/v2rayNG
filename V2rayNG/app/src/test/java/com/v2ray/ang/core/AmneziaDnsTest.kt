@@ -51,6 +51,15 @@ class AmneziaDnsTest {
         assertNull(settings.dnsServers)
     }
 
+    @Test fun suppliedIpv6PolicyAlsoControlsRemoteDnsWithoutReadingStorage() {
+        val source = profile("DNS = 1.1.1.1, 2606:4700:4700::1111")
+        val enabled = CoreOutboundBuilder.toOutboundWireguard(source, true)!!.settings!!
+        val disabled = CoreOutboundBuilder.toOutboundWireguard(source, false)!!.settings!!
+        assertEquals(listOf("1.1.1.1", "2606:4700:4700::1111"), enabled.remoteDNS)
+        assertEquals(listOf("1.1.1.1"), disabled.remoteDNS)
+        assertEquals(enabled.dnsServers, disabled.dnsServers)
+    }
+
     @Test fun idleKeepaliveAppliesOnlyToAmneziaWithoutAnExplicitValue() {
         val awg = profile("")
         val peer = { CoreOutboundBuilder.toOutboundWireguard(awg, true)!!.settings!!.peers!!.first() }

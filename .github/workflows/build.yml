@@ -117,6 +117,14 @@ jobs:
         run: |
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           chmod 755 gradlew
+          ./gradlew :app:testPlaystoreDebugUnitTest \
+            --tests com.v2ray.ang.service.RealPingExecutionLimiterTest \
+            --tests com.v2ray.ang.core.CoreStopGateTest \
+            --tests com.v2ray.ang.core.AmneziaDnsTest \
+            --tests com.v2ray.ang.fmt.WireguardUpgradeTest \
+            --tests com.v2ray.ang.UtilsTest \
+            --tests com.v2ray.ang.util.JsonUtilTest \
+            '-PABI_FILTERS=armeabi-v7a;arm64-v8a'
           ./gradlew :app:testPlaystoreDebugUnitTest :app:compilePlaystoreDebugKotlin \
             :app:assemblePlaystoreDebug :app:testFdroidDebugUnitTest \
             :app:compileFdroidDebugKotlin :app:assembleFdroidRelease \
@@ -174,3 +182,14 @@ jobs:
           path: V2rayNG/app/build/outputs/mapping/fdroidRelease/mapping.txt
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload test and lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v2rayNG-test-and-lint-diagnostics
+          path: |
+            V2rayNG/app/build/test-results/test*/*.xml
+            V2rayNG/app/build/reports/lint-results*
+          if-no-files-found: ignore
+          retention-days: 14
