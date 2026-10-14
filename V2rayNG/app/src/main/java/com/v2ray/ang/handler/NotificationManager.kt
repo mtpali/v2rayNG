@@ -49,9 +49,9 @@ object NotificationManager {
      * Starts the speed notification.
      * @param currentConfig The current profile configuration.
      */
-    fun startSpeedNotification() {
+    @Synchronized fun startSpeedNotification() {
         displaySpeed = MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) == true
-        if (speedNotificationJob != null || CoreServiceManager.isRunning() == false) return
+        if (speedNotificationJob != null || !CoreServiceManager.canSampleTraffic()) return
         // MobileTinaVPN does not poll the native core while the screen is off.
         // Keep that idle behavior for Amnezia; Xray's counters retain the bytes
         // until the next sample or the final flush during shutdown.
@@ -136,7 +136,7 @@ object NotificationManager {
     /**
      * Cancels the notification.
      */
-    fun cancelNotification(keepForeground: Boolean = false) {
+    @Synchronized fun cancelNotification(keepForeground: Boolean = false) {
         if (!keepForeground) getService()?.stopForeground(Service.STOP_FOREGROUND_REMOVE)
 
         if (!keepForeground) mBuilder = null
@@ -149,7 +149,7 @@ object NotificationManager {
     /**
      * Stops the speed notification.
      */
-    fun stopSpeedNotification() {
+    @Synchronized fun stopSpeedNotification() {
         // The native counters retain Amnezia traffic while the screen is off;
         // the next sample or shutdown flush persists it.
         displaySpeed = false

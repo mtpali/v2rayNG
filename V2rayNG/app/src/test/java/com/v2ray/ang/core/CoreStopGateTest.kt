@@ -35,4 +35,12 @@ class CoreStopGateTest {
         assertFalse(gate.isStopping())
         assertTrue(gate.begin(null))
     }
+    @Test fun wakingTheScreenCannotRestartSamplingWhileStopping() {
+        val gate = CoreStopGate()
+        assertTrue(gate.canSampleTraffic())
+        gate.begin(null)
+        assertFalse(gate.canSampleTraffic())
+        gate.finishIfDrained()
+        assertTrue(gate.canSampleTraffic())
+    }
 }

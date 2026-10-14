@@ -8,6 +8,6 @@ interface MainAdapterListener : BaseAdapterListener {
 
     fun onSelectServer(guid: String)
 
-    fun onShare(guid: String, profile: ProfileItem, position: Int, more: Boolean)
+    fun onShare(guid: String, profile: ProfileItem, position: Int)
 
 }

@@ -40,6 +40,8 @@ object SettingsManager {
     private var runtimeSocksPort: Int? = null
 
     fun initApp(context: Context) {
+        MmkvManager.removeSetting("pref_double_column_display")
+        MmkvManager.removeSetting("pref_is_booted")
         ensureDefaultSettings()
         //ensureDefaultSubscription()
         initRoutingRulesets(context)
@@ -224,10 +226,8 @@ object SettingsManager {
      */
     fun swapSubscriptions(fromPosition: Int, toPosition: Int) {
         val subsList = decodeSubsList()
-        if (subsList.isEmpty()) return
-
-        Collections.swap(subsList, fromPosition, toPosition)
-        MmkvManager.encodeSubsList(subsList)
+        if (fromPosition !in subsList.indices || toPosition !in subsList.indices) return
+        MmkvManager.moveSubscription(subsList[fromPosition], subsList[toPosition])
     }
 
     /**

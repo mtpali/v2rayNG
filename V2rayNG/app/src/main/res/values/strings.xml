@@ -163,8 +163,6 @@
     <string name="title_vpn_settings">VPN Settings</string>
     <string name="title_pref_per_app_proxy">Per-app proxy</string>
     <string name="summary_pref_per_app_proxy">General: Checked apps use proxy, unchecked apps connect directly; \nBypass mode: checked apps connect directly, unchecked apps use proxy. \nThe option to automatically select proxy applications is in the menu</string>
-    <string name="title_pref_is_booted">Auto connect at startup</string>
-    <string name="summary_pref_is_booted">Automatically connects to the selected server at startup, which may be unsuccessful</string>
 
     <string name="title_pref_auto_remove_invalid_after_test">Auto delete invalid config after testing</string>
     <string name="summary_pref_auto_remove_invalid_after_test">Test results may not be accurate; deleted config cannot be recovered.</string>
@@ -257,9 +255,6 @@
     <string name="title_pref_append_http_proxy">Append HTTP Proxy to VPN</string>
     <string name="summary_pref_append_http_proxy">HTTP proxy will be used directly from (browser/ some supported apps), without going through the virtual NIC device (Android 10+)</string>
 
-    <string name="title_pref_double_column_display">Enable double column display</string>
-    <string name="summary_pref_double_column_display">The profile list is displayed in double columns, allowing more content to be displayed on the screen. You need to restart the application to take effect.</string>
-
     <string name="title_pref_group_all_display">Enable show all groups</string>
     <string name="summary_pref_group_all_display">Add an extra "All Tabs" page</string>
 
@@ -284,7 +279,6 @@
     <string name="title_core_loglevel">Log Level</string>
     <string name="title_outbound_domain_resolve_method">Outbound domain pre-resolve method</string>
     <string name="title_mode">Mode</string>
-    <string name="title_mode_help">Click me for more help</string>
     <string name="title_language">Language</string>
     <string name="title_ui_settings">UI settings</string>
     <string name="title_pref_ui_mode_night">UI mode settings</string>
@@ -293,8 +287,7 @@
     <string name="title_pref_hev_tunnel_loglevel">Hev Tun Log Level</string>
     <string name="title_pref_hev_tunnel_rw_timeout">Hev Tun read/write timeout (seconds) (tcp,udp default 300,60)</string>
     <string name="title_mode_settings">Mode Settings</string>
-    <string name="title_root_mode_enabled">Root mode enabled (Root Users)</string>
-    <string name="summary_root_mode_enabled">Enable low-level transparent proxying via root privileges. This mode bypasses the standard Android system VPN to directly take over all underlying network traffic. Once enabled, the original regular mode, per-app routing, and related VPN settings will become completely invalid.</string>
+    <string name="title_root_mode_enabled">Root mode</string>
     <string name="toast_root_required">Root access is required for this feature</string>
     <string name="title_root_lan_sharing">VPN Hotspot</string>
     <string name="summary_root_lan_sharing">Route Wi-Fi hotspot and USB-tethered devices through the VPN</string>
@@ -421,13 +414,6 @@
         <item>Export full config to clipboard</item>
     </string-array>
 
-    <string-array name="share_method_more">
-        <item>QRcode</item>
-        <item>Export to clipboard</item>
-        <item>Export full config to clipboard</item>
-        <item>Edit</item>
-        <item>Delete</item>
-    </string-array>
 
     <string-array name="share_sub_method">
         <item>QRcode</item>
@@ -491,4 +477,13 @@
     <string name="title_clear_traffic">Clear traffic usage</string>
     <string name="confirm_clear_traffic">Reset traffic usage for all profiles?</string>
     <string name="profile_traffic_usage">↑ %1$s · ↓ %2$s</string>
+    <string name="subscription_rename">Rename subscription</string>
+    <string name="subscription_delete">Delete subscription</string>
+    <string name="subscription_show_link">Show link and QR code</string>
+    <string name="subscription_no_link">This subscription has no link.</string>
+    <string name="subscription_confirm_delete">Delete %1$s and all %2$d configurations?</string>
+    <string name="subscription_tab_hint">Hold for two seconds for actions, or hold and drag to reorder</string>
+    <string name="subscription_move_left">Move left</string>
+    <string name="subscription_move_right">Move right</string>
+    <string name="subscription_copy_link">Copy link</string>
 </resources>

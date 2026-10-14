@@ -7,6 +7,7 @@ import android.os.IBinder
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MyContextWrapper
@@ -31,6 +32,10 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service command received")
+        if (!MmkvManager.decodeSettingsString(AppConfig.PREF_STOP_REQUESTED).isNullOrEmpty()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         CoreServiceManager.startCoreLoop(null)
         return START_STICKY
     }
@@ -38,6 +43,11 @@ class CoreProxyOnlyService : Service(), ServiceControl {
     /**
      * Destroys the service.
      */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        com.v2ray.ang.root.HotspotSession.disable(this)
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         CoreServiceManager.stopCoreLoop()

@@ -2,7 +2,6 @@ package com.v2ray.ang.handler
 
 import com.tencent.mmkv.MMKV
 import com.v2ray.ang.AppConfig.DEFAULT_SUBSCRIPTION_ID
-import com.v2ray.ang.AppConfig.PREF_IS_BOOTED
 import com.v2ray.ang.AppConfig.PREF_ROUTING_RULESET
 import com.v2ray.ang.dto.entities.AssetUrlCache
 import com.v2ray.ang.dto.entities.AssetUrlItem
@@ -28,7 +27,7 @@ object MmkvManager {
         trafficStorage.lock()
         try {
             val state = readTraffic()
-            if (state.generation != generation) return false
+            if (state.generation != generation || !profileFullStorage.containsKey(guid)) return false
             val previous = state.profiles[guid] ?: com.v2ray.ang.dto.entities.ProfileTraffic()
             state.profiles[guid] = previous.add(up, down)
             check(trafficStorage.encode("snapshot", JsonUtil.toJson(state)))
@@ -459,13 +458,62 @@ object MmkvManager {
      *
      * @param subid The subscription ID.
      */
-    fun removeSubscription(subid: String) {
-        subStorage.remove(subid)
-        val subsList = decodeSubsList()
-        subsList.remove(subid)
-        encodeSubsList(subsList)
+    fun removeSubscription(subid: String) = withSubscriptionsLock {
+        if (!subStorage.containsKey(subid)) return@withSubscriptionsLock
+        trafficStorage.lock()
+        try {
+            val serverIds = decodeServerList(subid).toSet()
+            val remaining = decodeSubsList().filter { it != subid }.toMutableList()
+            val changes = linkedMapOf<Pair<MMKV, String>, String?>()
+            changes[subStorage to subid] = null
+            changes[mainStorage to "$KEY_SUB_SERVER_PREFIX$subid"] = null
+            if (getSelectServer() in serverIds) changes[mainStorage to KEY_SELECTED_SERVER] = null
+            serverIds.forEach { guid ->
+                changes[profileFullStorage to guid] = null
+                changes[serverRawStorage to guid] = null
+                changes[serverAffStorage to guid] = null
+            }
+            val traffic = readTraffic()
+            serverIds.forEach { traffic.profiles.remove(it) }
+            changes[trafficStorage to "snapshot"] = JsonUtil.toJson(traffic)
+            if (remaining.isEmpty()) {
+                remaining.add(DEFAULT_SUBSCRIPTION_ID)
+                changes[subStorage to DEFAULT_SUBSCRIPTION_ID] = JsonUtil.toJson(SubscriptionItem(remarks = "Default"))
+            }
+            changes[mainStorage to KEY_SUB_IDS] = JsonUtil.toJson(remaining)
+            writeSubscriptionChanges(changes)
+        } finally { trafficStorage.unlock() }
+    }
 
-        removeServerViaSubid(subid)
+    fun <T> withSubscriptionsLock(block: () -> T): T {
+        mainStorage.lock()
+        subStorage.lock()
+        try { return block() }
+        finally { subStorage.unlock(); mainStorage.unlock() }
+    }
+
+    private fun writeSubscriptionChanges(changes: Map<Pair<MMKV, String>, String?>) {
+        SubscriptionMutation.apply(changes, { (storage, key) -> storage.decodeString(key) },
+            { (storage, key), value ->
+                if (value != null) storage.encode(key, value)
+                else { storage.removeValueForKey(key); !storage.containsKey(key) }
+            }, { LogUtil.e("MmkvManager", "Subscription rollback failed") })
+    }
+
+    fun renameSubscription(subId: String, name: String): Boolean = withSubscriptionsLock {
+        val raw = subStorage.decodeString(subId) ?: return@withSubscriptionsLock false
+        val json = com.google.gson.JsonParser.parseString(raw).asJsonObject
+        json.addProperty("remarks", name.trim().also { require(it.isNotEmpty()) })
+        check(subStorage.encode(subId, json.toString()))
+        true
+    }
+
+    fun moveSubscription(source: String, target: String): Boolean = withSubscriptionsLock {
+        val original = decodeSubsList()
+        val moved = SubscriptionOrder.move(original, source, target)
+        if (original == moved) return@withSubscriptionsLock false
+        check(mainStorage.encode(KEY_SUB_IDS, JsonUtil.toJson(moved)))
+        true
     }
 
     /**
@@ -753,23 +801,7 @@ object MmkvManager {
     }
 
 
-    /**
-     * Encodes the start on boot setting.
-     *
-     * @param startOnBoot Whether to start on boot.
-     */
-    fun encodeStartOnBoot(startOnBoot: Boolean) {
-        encodeSettings(PREF_IS_BOOTED, startOnBoot)
-    }
-
-    /**
-     * Decodes the start on boot setting.
-     *
-     * @return Whether to start on boot.
-     */
-    fun decodeStartOnBoot(): Boolean {
-        return decodeSettingsBool(PREF_IS_BOOTED, false)
-    }
+    fun removeSetting(key: String) { settingsStorage.removeValueForKey(key) }
 
     //endregion
 

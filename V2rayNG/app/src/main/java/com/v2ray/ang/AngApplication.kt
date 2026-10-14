@@ -39,6 +39,7 @@ class AngApplication : MultiDexApplication() {
 
         // Ensure critical preference defaults are present in MMKV early
         SettingsManager.initApp(this)
+        com.v2ray.ang.root.HotspotSession.resetOnFreshUiProcess(this)
         SettingsManager.setNightMode()
 
         es.dmoral.toasty.Toasty.Config.getInstance()

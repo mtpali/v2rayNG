@@ -12,6 +12,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.v2ray.ang.AngApplication
+import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.GroupMapItem
@@ -42,6 +43,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val traffic: kotlinx.coroutines.flow.StateFlow<Map<String, com.v2ray.ang.dto.entities.ProfileTraffic>> = trafficState
     private val sharingState = kotlinx.coroutines.flow.MutableStateFlow(false)
     val lanSharing: kotlinx.coroutines.flow.StateFlow<Boolean> = sharingState
+    private val rootState = kotlinx.coroutines.flow.MutableStateFlow(SettingsManager.isRootMode())
+    val rootMode: kotlinx.coroutines.flow.StateFlow<Boolean> = rootState
+    private var rootJob: kotlinx.coroutines.Job? = null
+    val restartRequested = MutableLiveData<Boolean>(false)
+    val subscriptionsChanged = MutableLiveData<Int>(0)
     private var sharingJob: kotlinx.coroutines.Job? = null
 
     private var trafficRefreshJob: kotlinx.coroutines.Job? = null
@@ -56,6 +62,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 trafficState.value = profiles
                 sharingState.value = sharing
+                rootState.value = SettingsManager.isRootMode()
                 updateListAction.value = guid?.let(::getPosition) ?: -1
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -65,19 +72,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearTraffic() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                MmkvManager.clearTraffic()
-                withContext(Dispatchers.Main) { refreshTraffic() }
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "Failed to clear profile traffic", e)
-                withContext(Dispatchers.Main) { getApplication<AngApplication>().toastError(R.string.toast_failure) }
-            }
+        if (isRunning.value == true && !LauncherManager.isStopping()) {
+            MessageUtil.sendMsg2Service(getApplication(), AppConfig.MSG_CLEAR_TRAFFIC, "")
+            return
+        }
+        viewModelScope.launch {
+            try { withContext(Dispatchers.IO) { MmkvManager.clearTraffic() }; refreshTraffic() }
+            catch (e: Exception) { getApplication<AngApplication>().toastError(R.string.toast_failure) }
         }
     }
 
     fun toggleLanSharing() {
-        if (sharingJob?.isActive == true) return
+        if (sharingJob?.isActive == true || LauncherManager.isStopping()) return
         sharingJob = viewModelScope.launch {
             val enabled = !sharingState.value
             if (enabled && !com.v2ray.ang.root.RootManager.refresh()) {
@@ -85,7 +91,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             val saved = withContext(Dispatchers.IO) {
-                MmkvManager.encodeSettings(AppConfig.PREF_ROOT_LAN_SHARING, enabled)
+                com.v2ray.ang.root.HotspotSession.setEnabled(getApplication(), enabled)
             }
             if (!saved) {
                 getApplication<AngApplication>().toastError(R.string.toast_failure)
@@ -94,9 +100,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             sharingState.value = enabled
             // Use the same daemon restart command as the existing settings action.
             if (isRunning.value == true) {
-                MessageUtil.sendMsg2Service(getApplication(), AppConfig.MSG_STATE_RESTART, "")
+                restartRequested.value = true
             }
         }
+    }
+
+    fun toggleRootMode() {
+        if (rootJob?.isActive == true || LauncherManager.isStopping()) return
+        rootJob = viewModelScope.launch {
+            val enabled = !rootState.value
+            if (enabled && !com.v2ray.ang.root.RootManager.refresh()) {
+                getApplication<AngApplication>().toastError(R.string.toast_root_required)
+                return@launch
+            }
+            if (!withContext(Dispatchers.IO) { MmkvManager.encodeSettings(AppConfig.PREF_ROOT_MODE_ENABLE, enabled) }) {
+                getApplication<AngApplication>().toastError(R.string.toast_failure)
+                return@launch
+            }
+            rootState.value = enabled
+            if (isRunning.value == true) restartRequested.value = true
+        }
+    }
+
+    fun subscription(subId: String) = viewModelScope.async(Dispatchers.IO) { MmkvManager.decodeSubscription(subId) }
+    fun subscriptionServerCount(subId: String) = viewModelScope.async(Dispatchers.IO) { MmkvManager.decodeServerList(subId).size }
+    fun subscriptionQr(url: String) = viewModelScope.async(Dispatchers.Default) { com.v2ray.ang.util.QRCodeDecoder.createQRCode(url) }
+
+    fun renameSubscription(subId: String, name: String) = mutateSubscription {
+        MmkvManager.renameSubscription(subId, name)
+    }
+    fun moveSubscription(source: String, target: String) = mutateSubscription {
+        MmkvManager.moveSubscription(source, target)
+    }
+    fun removeSubscription(subId: String) = mutateSubscription {
+        if (MmkvManager.decodeSubscription(subId) == null) return@mutateSubscription false
+        if (MmkvManager.getSelectServer() in MmkvManager.decodeServerList(subId) && isRunning.value == true) {
+            withContext(Dispatchers.Main) { LauncherManager.stopVService(getApplication()) }
+        }
+        SettingsManager.removeSubscriptionWithDefault(subId)
+        true
+    }
+    private val subscriptionMutation = kotlinx.coroutines.sync.Mutex()
+    private fun mutateSubscription(block: suspend () -> Boolean): Deferred<Boolean> = viewModelScope.async {
+        subscriptionMutation.lock()
+        try {
+            val changed = withContext(Dispatchers.IO) { block() }
+            if (changed) {
+                reloadServerList()
+                refreshTraffic()
+                subscriptionsChanged.value = (subscriptionsChanged.value ?: 0) + 1
+            }
+            changed
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            LogUtil.e(AppConfig.TAG, "Subscription operation failed", e)
+            getApplication<AngApplication>().toastError(R.string.toast_failure)
+            false
+        } finally { subscriptionMutation.unlock() }
     }
 
     private val subscriptionUpdateGate = SubscriptionUpdateGate()
@@ -115,7 +175,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * `registerReceiver(Context, BroadcastReceiver, IntentFilter, int)`.
      */
     fun startListenBroadcast() {
-        isRunning.value = false
+        isRunning.value = LauncherManager.hasDaemon(getApplication())
         val mFilter = IntentFilter(AppConfig.BROADCAST_ACTION_ACTIVITY)
         ContextCompat.registerReceiver(getApplication(), mMsgReceiver, mFilter, Utils.receiverFlags())
         MessageUtil.sendMsg2Service(getApplication(), AppConfig.MSG_REGISTER_CLIENT, "")
@@ -516,11 +576,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 AppConfig.MSG_STATE_START_SUCCESS -> {
+                    LauncherManager.onStarted()
                     getApplication<AngApplication>().toastSuccess(R.string.toast_services_success)
                     isRunning.value = true
                 }
 
                 AppConfig.MSG_STATE_START_FAILURE -> {
+                    LauncherManager.onStarted()
                     val errorMessage = intent.getStringExtra("content")
                     if (!errorMessage.isNullOrBlank()) {
                         getApplication<AngApplication>().toastError(errorMessage)
@@ -530,7 +592,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     isRunning.value = false
                 }
 
+                AppConfig.MSG_STATE_STOP_FAILURE -> {
+                    isRunning.value = LauncherManager.hasDaemon(getApplication())
+                    getApplication<AngApplication>().toastError(R.string.toast_services_stop_failure)
+                }
                 AppConfig.MSG_STATE_STOP_SUCCESS -> {
+                    LauncherManager.onStopped()
                     isRunning.value = false
                 }
 
@@ -544,7 +611,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 AppConfig.MSG_TRAFFIC_UPDATED -> {
-                    refreshTraffic(intent.getStringExtra("content"))
+                    refreshTraffic(intent.getStringExtra("content")?.takeIf { it.isNotEmpty() })
                 }
 
                 AppConfig.MSG_MEASURE_CONFIG_FINISH -> {

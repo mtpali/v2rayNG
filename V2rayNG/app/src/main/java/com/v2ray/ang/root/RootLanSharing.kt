@@ -10,7 +10,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+
 
 
 object RootLanSharing {
@@ -47,11 +47,11 @@ object RootLanSharing {
      * async setup to finish first, otherwise a stop during setup tears down before the
      * rules are installed and they leak (orphan FORWARD/policy-routing rules + client tun).
      */
-    fun stopClientSharing(context: Context) {
+    suspend fun stopClientSharing(context: Context) {
         if (!lanSharingStarted) return
 
         lanSharingStarted = false
-        runBlocking { lanShareJob?.cancelAndJoin() }
+        lanShareJob?.cancelAndJoin()
         sharingScope?.cancel()
         sharingScope = null
         lanShareJob = null

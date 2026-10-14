@@ -58,4 +58,8 @@
         <item android:id="@+id/lan_sharing" android:checkable="true"
             android:icon="@drawable/ic_share_24dp" android:title="@string/title_root_lan_sharing" />
     </group>
+    <group android:id="@+id/group_root_mode" android:checkableBehavior="all">
+        <item android:id="@+id/root_mode" android:checkable="true"
+            android:icon="@drawable/ic_settings_24dp" android:title="@string/title_root_mode_enabled" />
+    </group>
 </menu>

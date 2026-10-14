@@ -9,7 +9,7 @@ import android.content.Intent
 import android.widget.RemoteViews
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
-import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.LauncherManager
 
 class WidgetProvider : AppWidgetProvider() {
     /**
@@ -22,7 +22,7 @@ class WidgetProvider : AppWidgetProvider() {
      */
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
-        updateWidgetBackground(context, appWidgetManager, appWidgetIds, CoreServiceManager.isRunning())
+        updateWidgetBackground(context, appWidgetManager, appWidgetIds, LauncherManager.hasDaemon(context))
     }
 
     /**
@@ -67,10 +67,10 @@ class WidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (AppConfig.BROADCAST_ACTION_WIDGET_CLICK == intent.action) {
-            if (CoreServiceManager.isRunning()) {
-                CoreServiceManager.stopVService(context)
+            if (LauncherManager.hasDaemon(context)) {
+                LauncherManager.stopVService(context)
             } else {
-                CoreServiceManager.startVServiceFromToggle(context)
+                LauncherManager.startVServiceFromToggle(context)
             }
         } else if (AppConfig.BROADCAST_ACTION_ACTIVITY == intent.action) {
             AppWidgetManager.getInstance(context)?.let { manager ->

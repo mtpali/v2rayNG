@@ -90,7 +90,7 @@
                                 android:id="@+id/tv_statistics"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:maxLines="2"
+                                android:maxLines="3"
                                 android:textAppearance="@style/TextAppearance.AppCompat.Small" />
 
                         </LinearLayout>
@@ -163,24 +163,6 @@
 
                     </LinearLayout>
 
-                    <LinearLayout
-                        android:id="@+id/layout_more"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:clickable="true"
-                        android:contentDescription="@string/notification_action_more"
-                        android:focusable="true"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="@dimen/padding_spacing_dp8">
-
-                        <ImageView
-                            android:layout_width="@dimen/image_size_dp24"
-                            android:layout_height="@dimen/image_size_dp24"
-                            app:srcCompat="@drawable/ic_more_vert_24dp" />
-
-                    </LinearLayout>
                 </LinearLayout>
 
             </LinearLayout>

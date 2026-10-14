@@ -24,7 +24,12 @@ import com.google.android.material.navigation.NavigationView
 import com.google.android.material.tabs.TabLayoutMediator
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
-import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.LauncherManager
+import androidx.core.view.ViewCompat
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import android.view.View
+import com.v2ray.ang.databinding.DialogSubscriptionLinkBinding
 import com.v2ray.ang.databinding.ActivityMainBinding
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.enums.PermissionType
@@ -42,6 +47,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import androidx.lifecycle.asFlow
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -86,6 +94,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.fabLocate.setOnClickListener { locateSelectedServer() }
         binding.layoutTest.setOnClickListener { handleLayoutTestClick() }
 
+        binding.tabGroup.onSubscriptionActions = ::showSubscriptionActions
+        binding.tabGroup.onSubscriptionMove = { source, target -> mainViewModel.moveSubscription(source, target) }
         setupGroupTab()
         setupViewModel()
         SubscriptionUpdater.sync()
@@ -114,6 +124,12 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             }
         }
 
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainViewModel.rootMode.collect { enabled -> binding.navView.menu.findItem(R.id.root_mode).isChecked = enabled }
+            }
+        }
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
@@ -131,6 +147,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         mainViewModel.updateTestResultAction.observe(this) { setTestState(it) }
         mainViewModel.isRunning.observe(this) { isRunning ->
             applyRunningState(false, isRunning)
+        }
+        mainViewModel.subscriptionsChanged.observe(this) { setupGroupTab() }
+        mainViewModel.restartRequested.observe(this) { requested ->
+            if (requested) { mainViewModel.restartRequested.value = false; restartV2Ray() }
         }
         mainViewModel.startListenBroadcast()
         mainViewModel.initAssets(assets)
@@ -151,7 +171,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         val targetIndex = groups.indexOfFirst { it.id == mainViewModel.subscriptionId }.takeIf { it >= 0 } ?: (groups.size - 1)
         binding.viewPager.setCurrentItem(targetIndex, false)
 
-        binding.tabGroup.isVisible = groups.size > 1
+        binding.tabGroup.isVisible = groups.isNotEmpty()
         refreshGroupTabTitles(true)
     }
 
@@ -175,11 +195,13 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun handleFabAction() {
+        if (LauncherManager.isStopping()) return
         applyRunningState(isLoading = true, isRunning = false)
 
-        if (mainViewModel.isRunning.value == true) {
-            CoreServiceManager.stopVService(this)
-        } else if (SettingsManager.isVpnMode()) {
+        if (mainViewModel.isRunning.value == true || LauncherManager.isStarting() || LauncherManager.hasDaemon(this)) {
+            restartJob?.cancel()
+            LauncherManager.stopVService(this)
+        } else if (SettingsManager.isVpnMode() && !SettingsManager.isRootMode()) {
             val intent = VpnService.prepare(this)
             if (intent == null) {
                 startV2Ray()
@@ -203,6 +225,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     private fun startV2Ray() {
         if (MmkvManager.getSelectServer().isNullOrEmpty()) {
             toast(R.string.title_file_chooser)
+            applyRunningState(isLoading = false, isRunning = false)
             return
         }
 
@@ -210,16 +233,19 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) {}
         }
 
-        CoreServiceManager.startVService(this)
+        LauncherManager.startVService(this)
     }
 
+    private var restartJob: kotlinx.coroutines.Job? = null
     fun restartV2Ray() {
-        if (mainViewModel.isRunning.value == true) {
-            CoreServiceManager.stopVService(this)
-        }
-        lifecycleScope.launch {
-            delay(500)
-            startV2Ray()
+        if (restartJob?.isActive == true) return
+        restartJob = lifecycleScope.launch {
+            if (mainViewModel.isRunning.value == true) {
+                LauncherManager.stopVService(this@MainActivity)
+                val stopped = withTimeoutOrNull(7_000) { mainViewModel.isRunning.asFlow().first { !it } }
+                if (stopped == null) return@launch
+            }
+            handleFabAction()
         }
     }
 
@@ -283,8 +309,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
         R.id.clear_traffic -> {
             AlertDialog.Builder(this).setMessage(R.string.confirm_clear_traffic)
-                .setPositiveButton(android.R.string.ok) { _, _ -> mainViewModel.clearTraffic() }
-                .setNegativeButton(android.R.string.cancel, null).show()
+                .setPositiveButton(android.android.R.string.ok) { _, _ -> mainViewModel.clearTraffic() }
+                .setNegativeButton(android.android.R.string.cancel, null).show()
             true
         }
         R.id.import_qrcode -> {
@@ -523,6 +549,68 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         return true
     }
 
+    private fun showSubscriptionActions(id: String) {
+        if (id.isBlank()) return
+        lifecycleScope.launch {
+            val subscription = mainViewModel.subscription(id).await() ?: return@launch
+            val options = intArrayOf(R.string.subscription_rename, R.string.subscription_delete,
+                R.string.subscription_show_link, R.string.subscription_move_left, R.string.subscription_move_right)
+            AlertDialog.Builder(this@MainActivity).setTitle(subscription.remarks)
+                .setItems(options.map(::getString).toTypedArray()) { _, index ->
+                    when (index) {
+                        0 -> {
+                            val input = EditText(this@MainActivity).apply { setText(subscription.remarks); selectAll(); isSingleLine = true }
+                            val dialog = AlertDialog.Builder(this@MainActivity).setTitle(R.string.subscription_rename)
+                                .setView(input).setNegativeButton(android.R.string.cancel, null)
+                                .setPositiveButton(android.R.string.ok, null).create()
+                            dialog.setOnShowListener {
+                                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                                    if (input.text.toString().isBlank()) input.error = getString(R.string.subscription_rename)
+                                    else { mainViewModel.renameSubscription(id, input.text.toString()); dialog.dismiss() }
+                                }
+                            }
+                            dialog.show()
+                        }
+                        1 -> lifecycleScope.launch {
+                            val count = mainViewModel.subscriptionServerCount(id).await()
+                            AlertDialog.Builder(this@MainActivity).setTitle(R.string.subscription_delete)
+                                .setMessage(getString(R.string.subscription_confirm_delete, subscription.remarks, count))
+                                .setNegativeButton(android.R.string.cancel, null)
+                                .setPositiveButton(android.R.string.ok) { _, _ -> mainViewModel.removeSubscription(id) }.show()
+                        }
+                        2 -> showSubscriptionLink(id)
+                        3, 4 -> {
+                            val groups = groupPagerAdapter.groups.filter { it.id.isNotEmpty() }
+                            val indexOfId = groups.indexOfFirst { it.id == id }
+                            groups.getOrNull(indexOfId + if (index == 3) -1 else 1)?.let { mainViewModel.moveSubscription(id, it.id) }
+                        }
+                    }
+                }.show()
+        }
+    }
+
+    private fun showSubscriptionLink(id: String) {
+        lifecycleScope.launch {
+            val subscription = mainViewModel.subscription(id).await() ?: return@launch
+            if (subscription.url.isBlank()) {
+                AlertDialog.Builder(this@MainActivity).setTitle(subscription.remarks)
+                    .setMessage(R.string.subscription_no_link).setPositiveButton(android.R.string.ok, null).show()
+                return@launch
+            }
+            val content = DialogSubscriptionLinkBinding.inflate(layoutInflater)
+            content.subscriptionLink.text = subscription.url
+            val dialog = AlertDialog.Builder(this@MainActivity).setTitle(subscription.remarks).setView(content.root)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.subscription_copy_link) { _, _ -> Utils.setClipboard(this@MainActivity, subscription.url) }.create()
+            val qr = mainViewModel.subscriptionQr(subscription.url)
+            val rendering = lifecycleScope.launch {
+                content.qrCode.setImageBitmap(qr.await())
+            }
+            dialog.setOnDismissListener { rendering.cancel(); qr.cancel() }
+            dialog.show()
+        }
+    }
+
     private fun showRenameConfigsDialog() {
         val groupId = mainViewModel.subscriptionId
         if (groupId.isBlank()) {
@@ -537,7 +625,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         AlertDialog.Builder(this)
             .setTitle(R.string.title_rename_configs)
             .setView(input)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setPositiveButton(android.android.R.string.ok) { _, _ ->
                 val prefix = input.text?.toString().orEmpty().trim()
                 if (prefix.isEmpty()) {
                     toastError(R.string.toast_profile_name_prefix_required)
@@ -561,7 +649,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(android.android.R.string.cancel, null)
             .show()
     }
 
@@ -581,7 +669,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     private fun delAllConfig() {
         AlertDialog.Builder(this).setMessage(R.string.del_config_comfirm)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setPositiveButton(android.android.R.string.ok) { _, _ ->
                 showLoading()
                 lifecycleScope.launch(Dispatchers.IO) {
                     val ret = mainViewModel.removeAllServer()
@@ -593,7 +681,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel) { _, _ ->
+            .setNegativeButton(android.android.R.string.cancel) { _, _ ->
                 //do noting
             }
             .show()
@@ -601,7 +689,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     private fun delDuplicateConfig() {
         AlertDialog.Builder(this).setMessage(R.string.del_config_comfirm)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setPositiveButton(android.android.R.string.ok) { _, _ ->
                 showLoading()
                 lifecycleScope.launch(Dispatchers.IO) {
                     val ret = mainViewModel.removeDuplicateServer()
@@ -613,7 +701,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel) { _, _ ->
+            .setNegativeButton(android.android.R.string.cancel) { _, _ ->
                 //do noting
             }
             .show()
@@ -621,7 +709,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     private fun delInvalidConfig() {
         AlertDialog.Builder(this).setMessage(R.string.del_invalid_config_comfirm)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setPositiveButton(android.android.R.string.ok) { _, _ ->
                 showLoading()
                 lifecycleScope.launch(Dispatchers.IO) {
                     val ret = mainViewModel.removeInvalidServer()
@@ -633,7 +721,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel) { _, _ ->
+            .setNegativeButton(android.android.R.string.cancel) { _, _ ->
                 //do noting
             }
             .show()
@@ -731,6 +819,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         when (item.itemId) {
             R.id.sub_setting -> requestActivityLauncher.launch(Intent(this, SubSettingActivity::class.java))
             R.id.rename_configs -> showRenameConfigsDialog()
+            R.id.root_mode -> {
+                mainViewModel.toggleRootMode()
+                return false
+            }
             R.id.lan_sharing -> {
                 mainViewModel.toggleLanSharing()
                 // The persisted ViewModel state owns this toggle, including root denial.
@@ -747,6 +839,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     override fun onDestroy() {
+        if (isFinishing) com.v2ray.ang.root.HotspotSession.disable(this)
         tabMediator?.detach()
         super.onDestroy()
     }

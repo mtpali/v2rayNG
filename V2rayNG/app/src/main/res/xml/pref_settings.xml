@@ -19,11 +19,6 @@
             android:title="@string/title_pref_start_scan_immediate" />
 
         <CheckBoxPreference
-            android:key="pref_double_column_display"
-            android:summary="@string/summary_pref_double_column_display"
-            android:title="@string/title_pref_double_column_display" />
-
-        <CheckBoxPreference
             android:key="pref_group_all_display"
             android:summary="@string/summary_pref_group_all_display"
             android:title="@string/title_pref_group_all_display" />
@@ -275,11 +270,6 @@
     <PreferenceCategory android:title="@string/title_advanced">
 
         <CheckBoxPreference
-            android:key="pref_is_booted"
-            android:summary="@string/summary_pref_is_booted"
-            android:title="@string/title_pref_is_booted" />
-
-        <CheckBoxPreference
             android:key="pref_auto_remove_invalid_after_test"
             android:defaultValue="false"
             android:summary="@string/summary_pref_auto_remove_invalid_after_test"
@@ -318,12 +308,6 @@
             android:key="pref_mode"
             android:summary="%s"
             android:title="@string/title_mode" />
-
-        <CheckBoxPreference
-            android:defaultValue="false"
-            android:key="pref_root_mode_enabled"
-            android:summary="@string/summary_root_mode_enabled"
-            android:title="@string/title_root_mode_enabled" />
 
 
 

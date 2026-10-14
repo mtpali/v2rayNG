@@ -49,7 +49,6 @@ object AppConfig {
     const val PREF_SPEED_ENABLED = "pref_speed_enabled"
     const val PREF_CONFIRM_REMOVE = "pref_confirm_remove"
     const val PREF_START_SCAN_IMMEDIATE = "pref_start_scan_immediate"
-    const val PREF_DOUBLE_COLUMN_DISPLAY = "pref_double_column_display"
     const val PREF_GROUP_ALL_DISPLAY = "pref_group_all_display"
     const val PREF_LANGUAGE = "pref_language"
     const val PREF_UI_MODE_NIGHT = "pref_ui_mode_night"
@@ -72,7 +71,6 @@ object AppConfig {
     const val PREF_MODE = "pref_mode"
     const val PREF_ROOT_MODE_ENABLE = "pref_root_mode_enabled"
     const val PREF_ROOT_LAN_SHARING = "pref_root_lan_sharing"
-    const val PREF_IS_BOOTED = "pref_is_booted"
     const val PREF_CHECK_UPDATE_PRE_RELEASE = "pref_check_update_pre_release"
     const val PREF_GEO_FILES_SOURCES = "pref_geo_files_sources"
     const val PREF_USE_HEV_TUNNEL = "pref_use_hev_tunnel_v2"
@@ -164,6 +162,7 @@ object AppConfig {
     const val MSG_STATE_START_SUCCESS = 31
     const val MSG_STATE_START_FAILURE = 32
     const val MSG_STATE_STOP = 4
+    const val MSG_STATE_STOP_FAILURE = 42
     const val MSG_STATE_STOP_SUCCESS = 41
     const val MSG_STATE_RESTART = 5
     const val MSG_MEASURE_DELAY = 6
@@ -173,6 +172,10 @@ object AppConfig {
     const val MSG_MEASURE_CONFIG_SUCCESS = 72
     const val MSG_MEASURE_CONFIG_NOTIFY = 73
     const val MSG_MEASURE_CONFIG_FINISH = 74
+    const val MSG_CLEAR_TRAFFIC = 82
+    const val PREF_CORE_PID = "core_session_pid"
+    const val PREF_STOP_REQUESTED = "service_stop_requested"
+    const val PREF_HOTSPOT_OWNER = "hotspot_owner"
     const val MSG_TRAFFIC_UPDATED = 81
 
     /** Notification channel IDs and names. */

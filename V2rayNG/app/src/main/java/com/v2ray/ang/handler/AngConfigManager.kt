@@ -590,18 +590,15 @@ object AngConfigManager {
                 return SubscriptionUpdateResult(failureCount = 1)
             }
 
-            val count = parseConfigViaSub(configText, it.guid, false)
-            if (count > 0) {
-                it.subscription.lastUpdated = System.currentTimeMillis()
-                MmkvManager.encodeSubscription(it.guid, it.subscription)
-                LogUtil.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs")
-                return SubscriptionUpdateResult(
-                    configCount = count,
-                    successCount = 1
-                )
-            } else {
-                // Got response but no valid configs parsed
-                return SubscriptionUpdateResult(failureCount = 1)
+            return MmkvManager.withSubscriptionsLock {
+                val current = MmkvManager.decodeSubscription(it.guid)
+                    ?: return@withSubscriptionsLock SubscriptionUpdateResult()
+                val count = parseConfigViaSub(configText, it.guid, false)
+                if (count > 0) {
+                    current.lastUpdated = System.currentTimeMillis()
+                    MmkvManager.encodeSubscription(it.guid, current)
+                    SubscriptionUpdateResult(configCount = count, successCount = 1)
+                } else SubscriptionUpdateResult(failureCount = 1)
             }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to update config via subscription", e)

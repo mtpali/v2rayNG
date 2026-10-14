@@ -44,9 +44,6 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(),
     private val share_method: Array<out String> by lazy {
         ownerActivity.resources.getStringArray(R.array.share_method)
     }
-    private val share_method_more: Array<out String> by lazy {
-        ownerActivity.resources.getStringArray(R.array.share_method_more)
-    }
     private val launcher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (SettingsChangeManager.consumeRestartService() && mainViewModel.isRunning.value == true) {
             ownerActivity.restartV2Ray()
@@ -67,9 +64,7 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(),
 
         adapter = MainRecyclerAdapter(mainViewModel, ActivityAdapterListener())
         binding.recyclerView.setHasFixedSize(true)
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_DOUBLE_COLUMN_DISPLAY, false)) {
-            binding.recyclerView.layoutManager = GridLayoutManager(requireContext(), 2)
-        } else {
+        binding.recyclerView.layoutManager = GridLayoutManager(requireContext(), 1) else {
             binding.recyclerView.layoutManager = GridLayoutManager(requireContext(), 1)
         }
         addCustomDividerToRecyclerView(binding.recyclerView, R.drawable.custom_divider)
@@ -275,16 +270,11 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(),
             setSelectServer(guid)
         }
 
-        override fun onShare(guid: String, profile: ProfileItem, position: Int, more: Boolean) {
+        override fun onShare(guid: String, profile: ProfileItem, position: Int) {
             val isCustom = profile.configType.isComplexType()
 
-            val (shareOptions, skip) = if (more) {
-                val options = if (isCustom) share_method_more.asList().takeLast(3) else share_method_more.asList()
-                options to if (isCustom) 2 else 0
-            } else {
-                val options = if (isCustom) share_method.asList().takeLast(1) else share_method.asList()
-                options to if (isCustom) 2 else 0
-            }
+            val shareOptions = if (isCustom) share_method.asList().takeLast(1) else share_method.asList()
+            val skip = if (isCustom) 2 else 0
 
             shareServer(guid, profile, position, shareOptions, skip)
         }

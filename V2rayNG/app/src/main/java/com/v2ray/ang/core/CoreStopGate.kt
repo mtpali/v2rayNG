@@ -5,6 +5,7 @@ internal class CoreStopGate {
     private var stopping = false
     private val callbacks = mutableListOf<() -> Unit>()
 
+    @Synchronized fun canSampleTraffic(): Boolean = !stopping
     @Synchronized fun isStopping(): Boolean = stopping
 
     @Synchronized fun begin(callback: (() -> Unit)?): Boolean {

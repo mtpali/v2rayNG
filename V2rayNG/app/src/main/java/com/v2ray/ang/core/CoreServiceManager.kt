@@ -23,6 +23,7 @@ import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.SpeedtestManager
 import com.v2ray.ang.root.RootManager
+import com.v2ray.ang.service.DaemonStopWatchdog
 import com.v2ray.ang.service.CoreProxyOnlyService
 import com.v2ray.ang.service.CoreRootService
 import com.v2ray.ang.service.CoreVpnService
@@ -54,6 +55,8 @@ object CoreServiceManager {
     @Volatile private var restartContext: Context? = null
     private var trafficGuid: String? = null
     private var trafficGeneration = "initial"
+    private var trafficTags: Set<String> = emptySet()
+    private var runtimeScope: CoroutineScope? = null
     private var processFinder: XrayProcessFinder? = null
     private var browserDialer: IDialerService? = null
 
@@ -69,59 +72,12 @@ object CoreServiceManager {
         }
 
     /**
-     * Starts the V2Ray service from a toggle action.
-     * @param context The context from which the service is started.
-     * @return True if the service was started successfully, false otherwise.
-     */
-    fun startVServiceFromToggle(context: Context): Boolean {
-        if (MmkvManager.getSelectServer().isNullOrEmpty()) {
-            context.toast(R.string.app_tile_first_use)
-            return false
-        }
-        try {
-            startContextService(context)
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: ${e.message}", e)
-            context.toast(e.message ?: e.javaClass.simpleName)
-            return false
-        }
-        return true
-    }
-
-    /**
-     * Starts the V2Ray service.
-     * @param context The context from which the service is started.
-     * @param guid The GUID of the server configuration to use (optional).
-     */
-    fun startVService(context: Context, guid: String? = null) {
-        LogUtil.i(AppConfig.TAG, "StartCore-Manager: startVService from ${context::class.java.simpleName}")
-
-        if (guid != null) {
-            MmkvManager.setSelectServer(guid)
-        }
-
-        try {
-            startContextService(context)
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: ${e.message}", e)
-            context.toast(e.message ?: e.javaClass.simpleName)
-        }
-    }
-
-    /**
-     * Stops the V2Ray service.
-     * @param context The context from which the service is stopped.
-     */
-    fun stopVService(context: Context) {
-        //context.toast(R.string.toast_services_stop)
-        MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "")
-    }
-
-    /**
      * Checks if the V2Ray service is running.
      * @return True if the service is running, false otherwise.
      */
     fun isRunning() = coreController.isRunning
+
+    fun canSampleTraffic() = stopGate.canSampleTraffic() && currentConfig != null
 
     /** Daemon-owned profile type; callers separately check that their service owns a live core. */
     fun isAmneziaProfile() = currentConfig?.isAmneziaWG == true
@@ -131,91 +87,6 @@ object CoreServiceManager {
      * @return The name of the running server.
      */
     fun getRunningServerName() = currentConfig?.remarks.orEmpty()
-
-    /**
-     * Starts the context service for V2Ray.
-     * Chooses between VPN service or Proxy-only service based on user settings.
-     * @param context The context from which the service is started.
-     * @throws IllegalStateException if the core is already running, no server is selected,
-     *   server config cannot be decoded, or server configuration is invalid.
-     * @throws Exception if the foreground service fails to start.
-     */
-    @Throws(Exception::class)
-    private fun startContextService(context: Context) {
-        if (coreController.isRunning) {
-            LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
-            return
-        }
-
-        val guid = MmkvManager.getSelectServer()
-            ?: run {
-                LogUtil.e(AppConfig.TAG, "StartCore-Manager: No server selected")
-                error(context.getString(R.string.app_tile_first_use))
-            }
-
-        val config = MmkvManager.decodeServerConfig(guid)
-            ?: run {
-                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to decode server config")
-                error(context.getString(R.string.toast_config_file_invalid))
-            }
-
-        if (!config.configType.isComplexType()
-            && !Utils.isValidUrl(config.server)
-            && !Utils.isPureIpAddress(config.server.orEmpty())
-        ) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Invalid server configuration")
-            error(context.getString(R.string.toast_config_file_invalid))
-        }
-
-        // refresh socks port when enabled dynamic socks port
-        SettingsManager.refreshRuntimeSocksPort()
-
-//        val result = V2rayConfigUtil.getV2rayConfig(context, guid)
-//        if (!result.status) error(result.errorMessage.ifBlank { "Failed to get V2Ray config" })
-
-        if (config.insecure == true) {
-            context.toastError(R.string.toast_allow_insecure_deprecated)
-            context.toastError(R.string.toast_allow_insecure_deprecated)
-        }
-
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)) {
-            context.toast(R.string.toast_warning_pref_proxysharing_short)
-        } else {
-            context.toast(R.string.toast_services_start)
-        }
-
-        val isRootMode = SettingsManager.isRootMode()
-        if (isRootMode && !RootManager.isRootAvailable()) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: root mode requires root but none available")
-            error(context.getString(R.string.toast_root_required))
-        }
-
-        val intent = if (isRootMode) {
-            LogUtil.i(AppConfig.TAG, "StartCore-Manager: Starting Root service")
-            Intent(context.applicationContext, CoreRootService::class.java)
-        } else if (SettingsManager.isVpnMode()) {
-            LogUtil.i(AppConfig.TAG, "StartCore-Manager: Starting VPN service")
-            Intent(context.applicationContext, CoreVpnService::class.java)
-        } else {
-            LogUtil.i(AppConfig.TAG, "StartCore-Manager: Starting Proxy service")
-            Intent(context.applicationContext, CoreProxyOnlyService::class.java)
-        }
-
-        try {
-            ContextCompat.startForegroundService(context, intent)
-        } catch (e: SecurityException) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Missing permission to start foreground service", e)
-            throw IllegalStateException(e.message ?: e.javaClass.simpleName, e)
-        } catch (e: RuntimeException) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                e.javaClass.name == "android.app.ForegroundServiceStartNotAllowedException"
-            ) {
-                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Foreground service start not allowed", e)
-                throw IllegalStateException(e.message ?: e.javaClass.simpleName, e)
-            }
-            throw e
-        }
-    }
 
     /**
      * Refer to the official documentation for [registerReceiver](https://developer.android.com/reference/androidx/core/content/ContextCompat#registerReceiver(android.content.Context,android.content.BroadcastReceiver,android.content.IntentFilter,int):
@@ -261,6 +132,10 @@ object CoreServiceManager {
             error(result.errorMessage.ifBlank { "Failed to get V2Ray config" })
         }
 
+        val runtimeContent = ProfileTrafficCounter.prepare(result.content)
+        trafficTags = ProfileTrafficCounter.tags(runtimeContent)
+        runtimeScope?.cancel()
+        runtimeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val mFilter = IntentFilter(AppConfig.BROADCAST_ACTION_SERVICE)
         mFilter.addAction(Intent.ACTION_SCREEN_ON)
         mFilter.addAction(Intent.ACTION_SCREEN_OFF)
@@ -284,7 +159,8 @@ object CoreServiceManager {
 
         NotificationManager.showNotification(currentConfig)
         CoreNativeManager.reconcileBrowserDialer(dialerAddr)
-        coreController.startLoop(result.content, tunFd)
+        check(MmkvManager.encodeSettings(AppConfig.PREF_CORE_PID, android.os.Process.myPid()))
+        coreController.startLoop(runtimeContent, tunFd)
 
         if (!coreController.isRunning) {
             error("Core failed to start")
@@ -325,6 +201,9 @@ object CoreServiceManager {
 
         // Stop sampling before releasing the core; only acknowledge stop after its
         // sockets and tunnel have actually closed, never after an arbitrary delay.
+        runtimeScope?.cancel()
+        runtimeScope = null
+        DaemonStopWatchdog.arm()
         NotificationManager.cancelNotification(keepForeground)
         // Keep the control receiver until shutdown completes. Otherwise a stop
         // tapped during a wake recovery is lost while the notification is still up.
@@ -335,7 +214,9 @@ object CoreServiceManager {
             try {
                 synchronized(this@CoreServiceManager) {
                     try {
-                        queryAllOutboundTrafficStats()
+                        try { queryAllOutboundTrafficStats() } catch (e: Exception) {
+                            LogUtil.e(AppConfig.TAG, "Final traffic sample failed", e)
+                        }
                     } finally {
                         trafficGuid = null
                         coreController.stopLoop()
@@ -365,6 +246,9 @@ object CoreServiceManager {
                         LogUtil.e(AppConfig.TAG, "StopCore-$mode: profile=$profileId failed to unregister receiver", e)
                     }
                     if (stopped) {
+                        MmkvManager.encodeSettings(AppConfig.PREF_CORE_PID, 0)
+                        currentConfig = null
+                        DaemonStopWatchdog.disarm()
                         MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
                         try {
                             onFinished?.invoke()
@@ -373,11 +257,11 @@ object CoreServiceManager {
                         }
                         val restart = restartContext
                         restartContext = null
-                        if (restart != null) startVService(restart)
+                        if (restart != null && MmkvManager.decodeSettingsString(AppConfig.PREF_STOP_REQUESTED).isNullOrEmpty()) LauncherManager.startVService(restart)
                     } else {
                         restartContext = null
                         NotificationManager.cancelNotification()
-                        MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, service.getString(R.string.toast_services_stop_failure))
+                        MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_FAILURE, service.getString(R.string.toast_services_stop_failure))
                         try {
                             onFailed?.invoke()
                         } catch (e: Exception) {
@@ -422,10 +306,9 @@ object CoreServiceManager {
         trafficGuid?.let { guid ->
             val generation = MmkvManager.readTraffic().generation
             if (generation == trafficGeneration) {
-                // Count the logical primary outbound once, excluding direct traffic
-                // and proxy-chain hops to avoid counting the same bytes twice.
-                val up = result.filter { it.tag == AppConfig.TAG_PROXY && it.direction == AppConfig.UPLINK }.sumOf { it.value }
-                val down = result.filter { it.tag == AppConfig.TAG_PROXY && it.direction == AppConfig.DOWNLINK }.sumOf { it.value }
+                val totals = ProfileTrafficCounter.total(result, trafficTags)
+                val up = totals.upload
+                val down = totals.download
                 if ((up > 0 || down > 0) && MmkvManager.addTraffic(guid, generation, up, down)) {
                     getService()?.let { MessageUtil.sendMsg2UI(it, AppConfig.MSG_TRAFFIC_UPDATED, guid) }
                 }
@@ -447,7 +330,7 @@ object CoreServiceManager {
             return
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
+        runtimeScope?.launch {
             val service = getService() ?: return@launch
             var time = -1L
             var errorStr = ""
@@ -607,6 +490,18 @@ object CoreServiceManager {
                     LogUtil.i(AppConfig.TAG, "StartCore-Manager: Restart service")
                     restartContext = serviceControl.getService().applicationContext
                     serviceControl.stopService()
+                }
+
+                AppConfig.MSG_CLEAR_TRAFFIC -> {
+                    runtimeScope?.launch {
+                        synchronized(this@CoreServiceManager) {
+                            if (stopGate.isStopping()) return@launch
+                            queryAllOutboundTrafficStats()
+                            MmkvManager.clearTraffic()
+                            trafficGeneration = MmkvManager.readTraffic().generation
+                        }
+                        MessageUtil.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_TRAFFIC_UPDATED, "")
+                    }
                 }
 
                 AppConfig.MSG_MEASURE_DELAY -> {

@@ -51,6 +51,7 @@ class CoreVpnService : VpnService(), ServiceControl {
     @Volatile private var networkRecovery = VpnNetworkRecoveryGate()
     @Volatile private var defaultNetworkCallback: ConnectivityManager.NetworkCallback? = null
     private var tun2SocksService: Tun2SocksControl? = null
+    private val teardownScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val wakeRecoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var wakeReceiverRegistered = false
     private val wakeReceiver = object : BroadcastReceiver() {
@@ -173,6 +174,11 @@ class CoreVpnService : VpnService(), ServiceControl {
 //        super.onLowMemory()
 //    }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        com.v2ray.ang.root.HotspotSession.disable(this)
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         destroyed.set(true)
         stopAllService()
@@ -182,6 +188,10 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service command received")
+        if (!MmkvManager.decodeSettingsString(AppConfig.PREF_STOP_REQUESTED).isNullOrEmpty()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (stopping.get()) return START_NOT_STICKY
         NotificationManager.showNotification(null)
         if (isRunning && CoreServiceManager.isRunning()) return START_STICKY
@@ -472,6 +482,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             NotificationManager.cancelNotification()
             return
         }
+        DaemonStopWatchdog.arm()
         releaseVpnAndCore()
     }
 
@@ -488,44 +499,48 @@ class CoreVpnService : VpnService(), ServiceControl {
             }
             defaultNetworkCallback = null
         }
-        tun2SocksService?.stopTun2Socks()
-        tun2SocksService = null
-        RootLanSharing.stopClientSharing(this)
+        teardownScope.launch {
+            tun2SocksService?.stopTun2Socks()
+            tun2SocksService = null
+            RootLanSharing.stopClientSharing(this@CoreVpnService)
 
-        val initiated = CoreServiceManager.stopCoreLoop(onStopped = {
-            // Runs on the manager's IO shutdown scope. Closing this descriptor before
-            // stopLoop returns can race native cleanup and a newly reused Android fd.
-            try {
-                if (::mInterface.isInitialized) mInterface.close()
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StopCore-VPN: Failed to close interface", e)
-            }
-        }, onFinished = {
-            if (networkRecovery.takeRecovery() && !destroyed.get()) {
-                // Remain in the existing foreground VPN service: Android 12+ can
-                // reject a new foreground-service start from a background callback.
-                stopping.set(false)
-                NotificationManager.showNotification(null)
-                if (setupVpnService()) startService()
-            } else {
+            val initiated = CoreServiceManager.stopCoreLoop(onStopped = {
+                // Runs on the manager's IO shutdown scope. Closing this descriptor before
+                // stopLoop returns can race native cleanup and a newly reused Android fd.
+                try {
+                    if (::mInterface.isInitialized) mInterface.close()
+                } catch (e: Exception) {
+                    LogUtil.e(AppConfig.TAG, "StopCore-VPN: Failed to close interface", e)
+                }
+            }, onFinished = {
+                if (networkRecovery.takeRecovery() && !destroyed.get()) {
+                    // Remain in the existing foreground VPN service: Android 12+ can
+                    // reject a new foreground-service start from a background callback.
+                    stopping.set(false)
+                    NotificationManager.showNotification(null)
+                    if (setupVpnService()) startService()
+                } else {
+                    NotificationManager.cancelNotification()
+                    stopSelf()
+                    teardownScope.cancel()
+                }
+            }, onFailed = {
+                // Never keep a foreground VPN notification after a failed native stop.
+                // The descriptor is closed by onStopped even when stopLoop throws.
                 NotificationManager.cancelNotification()
                 stopSelf()
+            }, keepForeground = networkRecovery.recoveryRequested())
+            if (!initiated) {
+                LogUtil.e(AppConfig.TAG, "StopCore-VPN: Shutdown unavailable, stopping service")
+                NotificationManager.cancelNotification()
+                try {
+                    if (::mInterface.isInitialized) mInterface.close()
+                } catch (e: Exception) {
+                    LogUtil.e(AppConfig.TAG, "StopCore-VPN: Failed to close interface after shutdown failure", e)
+                }
+                stopSelf()
             }
-        }, onFailed = {
-            // Never keep a foreground VPN notification after a failed native stop.
-            // The descriptor is closed by onStopped even when stopLoop throws.
-            NotificationManager.cancelNotification()
-            stopSelf()
-        }, keepForeground = networkRecovery.recoveryRequested())
-        if (!initiated) {
-            LogUtil.e(AppConfig.TAG, "StopCore-VPN: Shutdown unavailable, stopping service")
-            NotificationManager.cancelNotification()
-            try {
-                if (::mInterface.isInitialized) mInterface.close()
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StopCore-VPN: Failed to close interface after shutdown failure", e)
-            }
-            stopSelf()
+
         }
     }
 }
