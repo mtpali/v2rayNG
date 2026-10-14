@@ -7,6 +7,9 @@ internal class CoreStopGate {
 
     @Synchronized fun isStopping(): Boolean = stopping
 
+    @Synchronized fun canSampleTraffic(coreRunning: Boolean, finalFlush: Boolean = false): Boolean =
+        coreRunning && (!stopping || finalFlush)
+
     @Synchronized fun begin(callback: (() -> Unit)?): Boolean {
         if (callback != null) callbacks.add(callback)
         if (stopping) return false

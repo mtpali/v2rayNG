@@ -85,6 +85,9 @@ object CoreServiceManager {
      */
     fun isRunning() = coreController.isRunning
 
+    /** Ordinary daemon sampling must not resume while native shutdown is pending. */
+    fun canSampleTraffic() = stopGate.canSampleTraffic(isRunning())
+
     /** Daemon-owned profile type; callers separately check that their service owns a live core. */
     fun isAmneziaProfile() = currentConfig?.isAmneziaWG == true
 
@@ -238,7 +241,7 @@ object CoreServiceManager {
                 currentVpnInterface = null
                 synchronized(this@CoreServiceManager) {
                     try {
-                        queryAllOutboundTrafficStats()
+                        queryAllOutboundTrafficStats(finalFlush = true)
                     } finally {
                         trafficGuid = null
                         coreController.stopLoop()
@@ -358,9 +361,10 @@ object CoreServiceManager {
      * Go side format: tag,direction,value;tag,direction,value;
      */
     @Synchronized
-    fun queryAllOutboundTrafficStats(): List<OutboundTrafficStat> {
+    fun queryAllOutboundTrafficStats(finalFlush: Boolean = false): List<OutboundTrafficStat> {
         // The stats manager is gone once the core stops, querying it then reaches into freed state.
-        if (!isRunning()) return emptyList()
+        // Only the shutdown owner may flush counters after the stop gate closes.
+        if (!stopGate.canSampleTraffic(isRunning(), finalFlush)) return emptyList()
 
         val payload = coreController.queryAllOutboundTrafficStats()
 

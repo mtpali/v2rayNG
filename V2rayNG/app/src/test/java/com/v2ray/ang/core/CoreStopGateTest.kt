@@ -4,6 +4,24 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class CoreStopGateTest {
+    @Test fun screenWakeCannotResumeSamplingDuringShutdownButOwnerCanFlush() {
+        val gate = CoreStopGate()
+        assertFalse(gate.canSampleTraffic(coreRunning = false))
+        assertTrue(gate.canSampleTraffic(coreRunning = true))
+        assertTrue(gate.begin {
+            assertFalse(gate.canSampleTraffic(coreRunning = true))
+        })
+        assertFalse(gate.canSampleTraffic(coreRunning = true))
+        assertTrue(gate.canSampleTraffic(coreRunning = true, finalFlush = true))
+        assertFalse(gate.canSampleTraffic(coreRunning = false, finalFlush = true))
+        assertFalse(gate.begin(null))
+        gate.drain().forEach { it() }
+        assertFalse(gate.canSampleTraffic(coreRunning = true))
+        assertTrue(gate.finishIfDrained())
+        assertFalse(gate.canSampleTraffic(coreRunning = false))
+        assertTrue(gate.canSampleTraffic(coreRunning = true))
+    }
+
     @Test fun shutdownFailureDrainsOwnerCleanupAndReopensGate() {
         val gate = CoreStopGate()
         var closed = 0
