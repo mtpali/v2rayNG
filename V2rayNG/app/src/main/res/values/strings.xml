@@ -478,6 +478,7 @@
     <string name="confirm_clear_traffic">Reset traffic usage for all profiles?</string>
     <string name="profile_traffic_usage">↑ %1$s · ↓ %2$s</string>
     <string name="subscription_rename">Rename subscription</string>
+    <string name="subscription_actions">Subscription actions</string>
     <string name="subscription_delete">Delete subscription</string>
     <string name="subscription_show_link">Show link and QR code</string>
     <string name="subscription_no_link">This subscription has no link.</string>

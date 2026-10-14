@@ -1,6 +1,7 @@
 package com.v2ray.ang.root
 
 import android.content.Context
+import android.os.Build
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.util.LogUtil
 import java.io.File
@@ -17,6 +18,24 @@ object RootShell {
 
     data class Result(val code: Int, val output: String) {
         val success: Boolean get() = code == 0
+    }
+
+    internal fun waitForProcess(process: Process, timeoutSeconds: Long): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+        // Android 7 (API 24-25) lacks timed Process.waitFor. Poll off the main thread
+        // with a monotonic deadline; remove this fallback when minSdk reaches 26.
+        return awaitExit(process, TimeUnit.SECONDS.toNanos(timeoutSeconds), System::nanoTime) { Thread.sleep(50) }
+    }
+
+    internal fun awaitExit(process: Process, timeoutNanos: Long, now: () -> Long, pause: () -> Unit): Boolean {
+        val started = now()
+        while (true) {
+            try { process.exitValue(); return true }
+            catch (_: IllegalThreadStateException) {
+                if (now() - started >= timeoutNanos) return false
+                pause()
+            }
+        }
     }
 
     /** Write [script] to `<filesDir>/root/<name>` and run it as root. */
@@ -49,7 +68,7 @@ object RootShell {
                     }
                 } catch (_: Exception) { /* the timeout closes the pipe */ }
             }, "Root command output").apply { isDaemon = true; start() }
-            val finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+            val finished = waitForProcess(process, timeoutSeconds)
             if (!finished) {
                 process.destroy()
                 reader.join(200)

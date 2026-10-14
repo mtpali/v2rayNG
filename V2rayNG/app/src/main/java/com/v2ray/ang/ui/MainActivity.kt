@@ -25,10 +25,6 @@ import com.google.android.material.tabs.TabLayoutMediator
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.LauncherManager
-import androidx.core.view.ViewCompat
-import androidx.core.view.AccessibilityDelegateCompat
-import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
-import android.view.View
 import com.v2ray.ang.databinding.DialogSubscriptionLinkBinding
 import com.v2ray.ang.databinding.ActivityMainBinding
 import com.v2ray.ang.enums.EConfigType
@@ -165,6 +161,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             groupPagerAdapter.groups.getOrNull(position)?.let {
                 tab.text = it.remarks
                 tab.tag = it.id
+                binding.tabGroup.bindActions(tab)
             }
         }.also { it.attach() }
 

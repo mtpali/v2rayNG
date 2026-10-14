@@ -4,9 +4,13 @@ import android.content.Context
 import android.graphics.Rect
 import android.util.AttributeSet
 import android.view.HapticFeedbackConstants
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ViewConfiguration
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.google.android.material.tabs.TabLayout
+import com.v2ray.ang.R
 
 /** A two-second hold opens actions on release; dragging after the hold moves by GUID. */
 class SubscriptionTabLayout @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : TabLayout(context, attrs) {
@@ -20,6 +24,24 @@ class SubscriptionTabLayout @JvmOverloads constructor(context: Context, attrs: A
     private var armed = false
     private var dragging = false
     private var edgeDirection = 0
+
+    /** TalkBack and keyboard expose the same operations without changing the two-second touch hold. */
+    fun bindActions(tab: Tab) {
+        if ((tab.tag as? String).isNullOrBlank()) return
+        ViewCompat.replaceAccessibilityAction(tab.view,
+            AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_LONG_CLICK,
+            context.getString(R.string.subscription_actions)) { _, _ ->
+            (tab.tag as? String)?.let { onSubscriptionActions?.invoke(it) }
+            true
+        }
+        tab.view.setOnKeyListener { _, key, event ->
+            if (key != KeyEvent.KEYCODE_MENU && !(key == KeyEvent.KEYCODE_F10 && event.isShiftPressed)) false
+            else {
+                if (event.action == KeyEvent.ACTION_UP) (tab.tag as? String)?.let { onSubscriptionActions?.invoke(it) }
+                true
+            }
+        }
+    }
     private val arm = Runnable {
         if (source != null) {
             armed = true

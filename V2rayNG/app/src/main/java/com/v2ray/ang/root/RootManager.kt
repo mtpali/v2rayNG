@@ -6,7 +6,6 @@ import com.v2ray.ang.root.RootManager.refresh
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
 
 /**
  * Detects whether the device grants root (`su`) access.
@@ -46,7 +45,7 @@ object RootManager {
             val process = ProcessBuilder("su", "-c", "id -u")
                 .redirectErrorStream(true)
                 .start()
-            val finished = process.waitFor(10, TimeUnit.SECONDS)
+            val finished = RootShell.waitForProcess(process, 10)
             if (!finished) {
                 process.destroy()
                 LogUtil.w(AppConfig.TAG, "RootManager: su probe timed out")
