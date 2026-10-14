@@ -309,8 +309,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
         R.id.clear_traffic -> {
             AlertDialog.Builder(this).setMessage(R.string.confirm_clear_traffic)
-                .setPositiveButton(android.android.R.string.ok) { _, _ -> mainViewModel.clearTraffic() }
-                .setNegativeButton(android.android.R.string.cancel, null).show()
+                .setPositiveButton(android.R.string.ok) { _, _ -> mainViewModel.clearTraffic() }
+                .setNegativeButton(android.R.string.cancel, null).show()
             true
         }
         R.id.import_qrcode -> {
@@ -625,7 +625,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         AlertDialog.Builder(this)
             .setTitle(R.string.title_rename_configs)
             .setView(input)
-            .setPositiveButton(android.android.R.string.ok) { _, _ ->
+            .setPositiveButton(android.R.string.ok) { _, _ ->
                 val prefix = input.text?.toString().orEmpty().trim()
                 if (prefix.isEmpty()) {
                     toastError(R.string.toast_profile_name_prefix_required)
@@ -649,7 +649,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     }
                 }
             }
-            .setNegativeButton(android.android.R.string.cancel, null)
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
@@ -669,7 +669,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     private fun delAllConfig() {
         AlertDialog.Builder(this).setMessage(R.string.del_config_comfirm)
-            .setPositiveButton(android.android.R.string.ok) { _, _ ->
+            .setPositiveButton(android.R.string.ok) { _, _ ->
                 showLoading()
                 lifecycleScope.launch(Dispatchers.IO) {
                     val ret = mainViewModel.removeAllServer()
@@ -681,7 +681,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     }
                 }
             }
-            .setNegativeButton(android.android.R.string.cancel) { _, _ ->
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
                 //do noting
             }
             .show()
@@ -689,7 +689,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     private fun delDuplicateConfig() {
         AlertDialog.Builder(this).setMessage(R.string.del_config_comfirm)
-            .setPositiveButton(android.android.R.string.ok) { _, _ ->
+            .setPositiveButton(android.R.string.ok) { _, _ ->
                 showLoading()
                 lifecycleScope.launch(Dispatchers.IO) {
                     val ret = mainViewModel.removeDuplicateServer()
@@ -701,7 +701,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     }
                 }
             }
-            .setNegativeButton(android.android.R.string.cancel) { _, _ ->
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
                 //do noting
             }
             .show()
@@ -709,7 +709,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     private fun delInvalidConfig() {
         AlertDialog.Builder(this).setMessage(R.string.del_invalid_config_comfirm)
-            .setPositiveButton(android.android.R.string.ok) { _, _ ->
+            .setPositiveButton(android.R.string.ok) { _, _ ->
                 showLoading()
                 lifecycleScope.launch(Dispatchers.IO) {
                     val ret = mainViewModel.removeInvalidServer()
@@ -721,7 +721,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     }
                 }
             }
-            .setNegativeButton(android.android.R.string.cancel) { _, _ ->
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
                 //do noting
             }
             .show()

@@ -64,9 +64,7 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(),
 
         adapter = MainRecyclerAdapter(mainViewModel, ActivityAdapterListener())
         binding.recyclerView.setHasFixedSize(true)
-        binding.recyclerView.layoutManager = GridLayoutManager(requireContext(), 1) else {
-            binding.recyclerView.layoutManager = GridLayoutManager(requireContext(), 1)
-        }
+        binding.recyclerView.layoutManager = GridLayoutManager(requireContext(), 1)
         addCustomDividerToRecyclerView(binding.recyclerView, R.drawable.custom_divider)
         binding.recyclerView.adapter = adapter
 

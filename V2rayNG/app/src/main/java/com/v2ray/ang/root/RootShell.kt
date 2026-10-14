@@ -59,7 +59,7 @@ object RootShell {
             reader.join(200)
             val result = Result(process.exitValue(), synchronized(captured) { captured.toString() })
             if (!result.success) {
-                LogUtil.w(AppConfig.TAG, "RootShell: '$command' exited ${result.code}: ${output.trim()}")
+                LogUtil.w(AppConfig.TAG, "RootShell: '$command' exited ${result.code}: ${result.output.trim()}")
             }
             result
         } catch (e: Exception) {
