@@ -359,6 +359,27 @@ index 0000000000000000000000000000000000000000..0e351b58deaa97f1f61ac8219f5acb68
 + legacy, err := c.Build(); if err != nil { t.Fatal(err) }
 + if len(legacy.(*wireguard.DeviceConfig).DnsServers) != 0 { t.Fatal("legacy config gained DNS") }
 +}
+diff --git a/proxy/masque/client.go b/proxy/masque/client.go
+index 161542f6b1fe7717455866dd22f88c6908c46a15..691ddf337360f6eaa4d05df4e29f8a2f6ba74845 100644
+--- a/proxy/masque/client.go
++++ b/proxy/masque/client.go
+@@ -13 +13 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+diff --git a/proxy/masque/server.go b/proxy/masque/server.go
+index f9cc2ff37e28ca9be60882d452f8b3f58fe49755..766aaf93b8043dc7618e66298ca37a23048c703c 100644
+--- a/proxy/masque/server.go
++++ b/proxy/masque/server.go
+@@ -13 +13 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+diff --git a/proxy/masque/server_test.go b/proxy/masque/server_test.go
+index 9b526f76466a09be6d26b7bb00e69d92104c9498..0b67052ebf9f3b8bd8859214b481a89b64284c14 100644
+--- a/proxy/masque/server_test.go
++++ b/proxy/masque/server_test.go
+@@ -17 +17 @@ import (
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 diff --git a/proxy/wireguard/amnezia_device_test.go b/proxy/wireguard/amnezia_device_test.go
 new file mode 100644
 index 0000000000000000000000000000000000000000..22d1a905d3e6a25299de83585fb844b4b6dfc952

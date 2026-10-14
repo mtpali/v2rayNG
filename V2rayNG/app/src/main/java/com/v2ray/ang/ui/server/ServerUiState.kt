@@ -151,6 +151,7 @@ class ServerUiState(
             localAddress = if (isWireguard) localAddress else null,
             mtu = if (isWireguard) mtu.toIntOrNull() else null,
             remoteDNS = if (isWireguard) remoteDNS else null,
+            awgDns = if (isWireguard && initialConfig.isAmneziaWG) remoteDNS.nullIfBlank() else initialConfig.awgDns,
             obfsPassword = if (isHysteria2) obfsPassword else null,
             portHopping = if (isHysteria2) portHopping else null,
             portHoppingInterval = if (isHysteria2) portHoppingInterval else null,
@@ -208,7 +209,9 @@ class ServerUiState(
                 reserved = initialConfig.reserved ?: "0,0,0",
                 localAddress = initialConfig.localAddress ?: WIREGUARD_LOCAL_ADDRESS_V4,
                 mtu = initialConfig.mtu?.toString() ?: WIREGUARD_LOCAL_MTU,
-                remoteDNS = initialConfig.remoteDNS ?: WIREGUARD_LOCAL_REMOTE_DNS,
+                remoteDNS = initialConfig.remoteDNS
+                    ?: initialConfig.awgDns.takeIf { initialConfig.isAmneziaWG }
+                    ?: WIREGUARD_LOCAL_REMOTE_DNS,
                 obfsPassword = initialConfig.obfsPassword ?: "",
                 portHopping = initialConfig.portHopping ?: "",
                 portHoppingInterval = initialConfig.portHoppingInterval ?: "",

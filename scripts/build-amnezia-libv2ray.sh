@@ -69,6 +69,8 @@ patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
     gofmt -w infra/conf/wireguard*.go proxy/wireguard/*.go
     GOWORK=off go test ./infra/conf -run 'TestAmneziaWG|TestWireGuard' -count=1
     GOWORK=off go test ./proxy/wireguard -count=1
+    # MASQUE shares CreateNetTUN; its consumer interface must remain compatible.
+    GOWORK=off go test ./proxy/masque -count=1
     # Stress teardown and packet delivery under the host race detector.
     GOWORK=off go test -race ./proxy/wireguard -run TestAmneziaWG -skip TestAmneziaWGProtectedHandshake -count=10 -timeout=90s
     GOWORK=off go test -race ./proxy/wireguard -run TestAmneziaWGProtectedHandshake -count=1 -timeout=180s
