@@ -4,8 +4,12 @@ import android.content.Context
 import com.v2ray.ang.core.CoreConfigManager
 import com.v2ray.ang.core.CoreNativeManager
 import com.v2ray.ang.dto.RealPingEvent
+import com.v2ray.ang.enums.EConfigType
+import com.v2ray.ang.extension.isComplexType
+import com.v2ray.ang.extension.isNotNullEmpty
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.SpeedtestManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -103,7 +107,7 @@ class RealPingWorkerService(
     private suspend fun startRealPing(guid: String): Long {
         val retFailure = -1L
 
-        if (MmkvManager.decodeServerConfig(guid) == null) return retFailure
+        val config = MmkvManager.decodeServerConfig(guid) ?: return retFailure
         // A TCP preflight rejects healthy UDP transports, including WireGuard/AmneziaWG.
         // Let the native outbound test the configured transport directly.
         val configResult = CoreConfigManager.getV2rayConfig4Speedtest(context, guid)
