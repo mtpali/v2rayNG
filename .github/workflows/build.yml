@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           # The release APK must be built from this branch's 2.3.11 source.
-          # The PR merge ref can inherit main's deletion of gradle-wrapper.jar.
+          # Keep artifacts and diagnostics tied to the exact candidate head.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
           fetch-depth: 0

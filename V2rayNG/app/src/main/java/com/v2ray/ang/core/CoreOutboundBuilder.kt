@@ -253,7 +253,9 @@ object CoreOutboundBuilder {
             ipv4Addresses.ifEmpty { listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4) }
         }
 
-        val rawDNS = profileItem.remoteDNS
+        // Old custom profiles only stored awgDns; new editor changes use remoteDNS.
+        val profileDns = profileItem.remoteDNS ?: profileItem.awgDns.takeIf { profileItem.isAmneziaWG }
+        val rawDNS = profileDns
             ?.split(",")
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }
@@ -290,7 +292,7 @@ object CoreOutboundBuilder {
             wireguard.remoteDNS = remotes
             wireguard.reserved = profileItem.reserved?.takeIf { it.isNotBlank() }?.split(",")?.filter { it.isNotBlank() }?.map { it.trim().toInt() }
             if (profileItem.isAmneziaWG) {
-                wireguard.dnsServers = profileItem.awgDns?.split(',', '\n')
+                wireguard.dnsServers = profileDns?.split(',', '\n')
                     ?.map { it.trim() }
                     ?.filter { Utils.isPureIpAddress(it) }
                     ?.distinct()

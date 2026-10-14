@@ -668,17 +668,19 @@ index fda540d4d9707be2d38b36adf6e5f044230decdd..d6a7f7c101b7288eade197f46e7f8623
 -		if len(bufs[i]) > 3 && len(b.reserved) == 3 {
 +		if !b.amnezia && len(bufs[i]) > 3 && len(b.reserved) == 3 {
 diff --git a/proxy/wireguard/client.go b/proxy/wireguard/client.go
-index c47e3c8b195d20f6906c17ed0110909e11c91251..6005cffc160ec107051838b999ff8deda4894a0c 100644
+index c47e3c8b195d20f6906c17ed0110909e11c91251..bfdddf9f64da1d5907ea8611bf95d4f8fee62f49 100644
 --- a/proxy/wireguard/client.go
 +++ b/proxy/wireguard/client.go
-@@ -12 +12 @@ import (
+@@ -3,0 +4 @@ import (
++	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
+@@ -12 +13 @@ import (
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
-@@ -13,0 +14 @@ import (
+@@ -13,0 +15 @@ import (
 +	"github.com/amnezia-vpn/amneziawg-go/v3/device"
-@@ -30 +30,0 @@ import (
+@@ -30 +31,0 @@ import (
 -	"golang.zx2c4.com/wireguard/device"
-@@ -42,4 +42,5 @@ type Handler struct {
+@@ -42,4 +43,5 @@ type Handler struct {
 -	tun  tun.Device
 -	tnet *Net
 -	dev  *device.Device
@@ -688,7 +690,7 @@ index c47e3c8b195d20f6906c17ed0110909e11c91251..6005cffc160ec107051838b999ff8ded
 +	dev    *device.Device
 +	mu     sync.Mutex
 +	closed bool
-@@ -101,7 +102,3 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+@@ -101,7 +103,3 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 -	dns := conf.DNS
 -	if len(dns) == 0 {
 -		dns = []string{"1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"}
@@ -699,18 +701,18 @@ index c47e3c8b195d20f6906c17ed0110909e11c91251..6005cffc160ec107051838b999ff8ded
 +	dnsServers, err := clientDNSServers(conf)
 +	if err != nil {
 +		return nil, err
-@@ -109 +105,0 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+@@ -109 +106,0 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 -
-@@ -116 +112 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+@@ -116 +113 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 -	if !conf.NoKernelTun && kernelTunSupported {
 +	if !conf.NoKernelTun && conf.AmneziaConfig == "" && kernelTunSupported {
-@@ -118 +114 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+@@ -118 +115 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 -		tun, tnet, err = createKernelTun(localAddresses, dnses, int(conf.Mtu))
 +		tun, tnet, err = createKernelTun(localAddresses, dnsServers, int(conf.Mtu))
-@@ -121 +117 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+@@ -121 +118 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 -		tun, tnet, _, err = CreateNetTUN(localAddresses, dnses, int(conf.Mtu), true)
 +		tun, tnet, _, err = CreateNetTUN(localAddresses, dnsServers, int(conf.Mtu), true)
-@@ -140,0 +137,19 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
+@@ -140,0 +138,19 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 +// Keep profile resolvers inside the tunnel: remote domain lookup does not use
 +// Xray's global DNS client. Empty preserves the historical WireGuard defaults.
 +func clientDNSServers(conf *DeviceConfig) ([]netip.Addr, error) {
@@ -730,7 +732,7 @@ index c47e3c8b195d20f6906c17ed0110909e11c91251..6005cffc160ec107051838b999ff8ded
 +	return servers, nil
 +}
 +
-@@ -154,0 +170,10 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
+@@ -154,0 +171,10 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 +	h.mu.Lock()
 +	if h.closed {
 +		h.mu.Unlock()
@@ -741,38 +743,38 @@ index c47e3c8b195d20f6906c17ed0110909e11c91251..6005cffc160ec107051838b999ff8ded
 +	if err != nil {
 +		return err
 +	}
-@@ -233,0 +259,4 @@ func (h *Handler) Close() (err error) {
+@@ -233,0 +260,4 @@ func (h *Handler) Close() (err error) {
 +	if h.closed {
 +		return nil
 +	}
 +	h.closed = true
-@@ -248,2 +277,2 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -248,2 +278,2 @@ func (h *Handler) init(ctx context.Context) error {
 -	if h.tun == nil {
 -		return errors.New("closed")
 +	if h.closed {
 +		return gonet.ErrClosed
-@@ -290,2 +319 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -290,2 +320 @@ func (h *Handler) init(ctx context.Context) error {
 -	// device.NewDevice may use the bind right away (Up -> BindUpdate -> Open),
 -	// so everything it reads must be set before creating the device.
 +	// Initialize the bind before NewDevice can open it.
-@@ -294,2 +322,3 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -294,2 +323,3 @@ func (h *Handler) init(ctx context.Context) error {
 -		listenFunc:  listenFunc,
 -		reserved:    h.conf.Reserved,
 +		listenFunc: listenFunc,
 +		reserved: h.conf.Reserved,
 +		amnezia: h.conf.AmneziaConfig != "",
-@@ -314,0 +344,6 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -314,0 +345,6 @@ func (h *Handler) init(ctx context.Context) error {
 +	if h.conf.AmneziaConfig != "" {
 +		cfg.WriteString(h.conf.AmneziaConfig)
 +		if !strings.HasSuffix(h.conf.AmneziaConfig, "\n") {
 +			cfg.WriteByte('\n')
 +		}
 +	}
-@@ -329,0 +365,3 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -329,0 +366,3 @@ func (h *Handler) init(ctx context.Context) error {
 +		dev.Close()
 +		h.tun = nil
 +		h.closed = true
-@@ -333,0 +372,3 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -333,0 +373,3 @@ func (h *Handler) init(ctx context.Context) error {
 +		dev.Close()
 +		h.tun = nil
 +		h.closed = true
@@ -789,41 +791,40 @@ index 7aec161ff0f83086e3993f1846639a4e9f1bad54..d24b033b317fab2e417afbef33e51d86
 +  repeated string dns_servers = 12;
 +}
 diff --git a/proxy/wireguard/netstack.go b/proxy/wireguard/netstack.go
-index cc04f1580118fab4f4f5ad5a1ce8afef5506bc2d..0d7cfc3d5e8a31069348db7e72241eb047565b69 100644
+index cc04f1580118fab4f4f5ad5a1ce8afef5506bc2d..e32706370dfd2ccc7e495af2f8abba383b30874c 100644
 --- a/proxy/wireguard/netstack.go
 +++ b/proxy/wireguard/netstack.go
 @@ -20,0 +21 @@ import (
 +	"sync"
-@@ -25 +26,2 @@ import (
+@@ -25 +26 @@ import (
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
-+	"github.com/xtls/xray-core/transport/internet"
-@@ -47 +49,2 @@ type netTun struct {
+@@ -47 +48,2 @@ type netTun struct {
 -	closed         chan struct{}
 +	done           chan struct{}
 +	closeOnce      sync.Once
-@@ -64 +67 @@ func CreateNetTUN(localAddresses, dnsServers []netip.Addr, mtu int, handleLocal
+@@ -64 +66 @@ func CreateNetTUN(localAddresses, dnsServers []netip.Addr, mtu int, handleLocal
 -		closed:         make(chan struct{}),
 +		done:           make(chan struct{}),
-@@ -133,2 +136 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
+@@ -133,2 +135 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
 -	case view = <-tun.incomingPacket:
 -	case <-tun.closed:
 +	case <-tun.done:
-@@ -135,0 +138 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
+@@ -135,0 +137 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
 +	case view = <-tun.incomingPacket:
-@@ -136,0 +140 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
+@@ -136,0 +139 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
 +	defer view.Release()
-@@ -139 +142,0 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
+@@ -139 +141,0 @@ func (tun *netTun) Read(buf [][]byte, sizes []int, offset int) (int, error) {
 -	view.Release()
-@@ -175,0 +179 @@ func (tun *netTun) WriteNotify() {
+@@ -175,0 +178 @@ func (tun *netTun) WriteNotify() {
 +	// Shutdown must unblock a notifier even when the device reader has stopped.
-@@ -177,2 +181 @@ func (tun *netTun) WriteNotify() {
+@@ -177,2 +180 @@ func (tun *netTun) WriteNotify() {
 -	case tun.incomingPacket <- view:
 -	case <-tun.closed:
 +	case <-tun.done:
-@@ -179,0 +183 @@ func (tun *netTun) WriteNotify() {
+@@ -179,0 +182 @@ func (tun *netTun) WriteNotify() {
 +	case tun.incomingPacket <- view:
-@@ -184,6 +188,8 @@ func (tun *netTun) Close() error {
+@@ -184,6 +187,8 @@ func (tun *netTun) Close() error {
 -	tun.stack.RemoveNIC(1)
 -	tun.stack.Close()
 -	tun.ep.RemoveNotify(tun.notifyHandle)
@@ -838,7 +839,7 @@ index cc04f1580118fab4f4f5ad5a1ce8afef5506bc2d..0d7cfc3d5e8a31069348db7e72241eb0
 +		tun.stack.RemoveNIC(1)
 +		tun.stack.Close()
 +		tun.ep.Close()
-@@ -191,6 +197 @@ func (tun *netTun) Close() error {
+@@ -191,6 +196 @@ func (tun *netTun) Close() error {
 -	}
 -
 -	// we don't close incomingPacket, because WriteNotify may be mid-send on it (DNS lookup) and would panic.
@@ -864,15 +865,14 @@ index edad5545d0bdd529135d68a9f4f5b5324859a30e..7e8ed171307a2faa10686a694e57699b
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 diff --git a/proxy/wireguard/tun_linux.go b/proxy/wireguard/tun_linux.go
-index 4b95e793942895ca965d0a2a3cc23bff50c1ce2b..da8996d82cf5c16746623fc97b8c04ffe9b72ae7 100644
+index 4b95e793942895ca965d0a2a3cc23bff50c1ce2b..5d8dbc2bb3614f7a7b0e58ef3ace978a1981e6ef 100644
 --- a/proxy/wireguard/tun_linux.go
 +++ b/proxy/wireguard/tun_linux.go
 @@ -16,0 +17 @@ import (
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
-@@ -20 +21 @@ import (
+@@ -20 +20,0 @@ import (
 -	"golang.zx2c4.com/wireguard/tun"
-+	"github.com/xtls/xray-core/transport/internet"
-@@ -272,2 +273,5 @@ func KernelTunSupported() (bool, error) {
+@@ -272,2 +272,5 @@ func KernelTunSupported() (bool, error) {
 -	var data unix.CapUserData
 -	if err := unix.Capget(&hdr, &data); err != nil {
 +	// Linux capability ABI v3 writes two records, including on 32-bit Android.
@@ -880,6 +880,6 @@ index 4b95e793942895ca965d0a2a3cc23bff50c1ce2b..da8996d82cf5c16746623fc97b8c04ff
 +	// Keep both records while using LINUX_CAPABILITY_VERSION_3 (capget(2)).
 +	var data [2]unix.CapUserData
 +	if err := unix.Capget(&hdr, &data[0]); err != nil {
-@@ -277 +281 @@ func KernelTunSupported() (bool, error) {
+@@ -277 +280 @@ func KernelTunSupported() (bool, error) {
 -	return (data.Effective & (1 << unix.CAP_NET_ADMIN)) != 0, nil
 +	return (data[0].Effective & (1 << unix.CAP_NET_ADMIN)) != 0, nil

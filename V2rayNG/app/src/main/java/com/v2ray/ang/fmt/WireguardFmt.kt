@@ -239,7 +239,7 @@ object WireguardFmt : FmtBase() {
         if (!config.isAmneziaWG) appendValue("DNS", config.remoteDNS)
         appendValue("FinalMask", config.finalMask)
         if (config.isAmneziaWG) {
-            appendValue("DNS", config.awgDns)
+            appendValue("DNS", config.remoteDNS ?: config.awgDns)
             appendInt("Jc", config.awgJc)
             appendInt("Jmin", config.awgJmin)
             appendInt("Jmax", config.awgJmax)

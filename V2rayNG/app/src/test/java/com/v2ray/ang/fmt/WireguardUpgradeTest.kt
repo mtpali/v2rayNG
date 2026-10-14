@@ -46,6 +46,20 @@ class WireguardUpgradeTest {
     }
 
     @Test
+    fun editingNewDnsFieldOverridesLegacyAmneziaDnsDuringSharing() {
+        val profile = ProfileItem.create(EConfigType.WIREGUARD).apply {
+            isAmneziaWG = true
+            awgDns = "100.64.0.1"
+            remoteDNS = "9.9.9.9"
+            server = "peer.example"
+            serverPort = "51820"
+        }
+        val imported = requireNotNull(WireguardFmt.parseAmneziaWG(WireguardFmt.exportUri(profile)))
+        assertEquals("9.9.9.9", imported.awgDns)
+        assertEquals("9.9.9.9", imported.remoteDNS)
+    }
+
+    @Test
     fun profilesWithDifferentAmneziaParametersRemainDistinct() {
         val first = ProfileItem.create(EConfigType.WIREGUARD).apply {
             isAmneziaWG = true
