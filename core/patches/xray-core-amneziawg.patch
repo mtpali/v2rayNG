@@ -668,11 +668,11 @@ index fda540d4d9707be2d38b36adf6e5f044230decdd..d6a7f7c101b7288eade197f46e7f8623
 -		if len(bufs[i]) > 3 && len(b.reserved) == 3 {
 +		if !b.amnezia && len(bufs[i]) > 3 && len(b.reserved) == 3 {
 diff --git a/proxy/wireguard/client.go b/proxy/wireguard/client.go
-index c47e3c8b195d20f6906c17ed0110909e11c91251..bfdddf9f64da1d5907ea8611bf95d4f8fee62f49 100644
+index c47e3c8b195d20f6906c17ed0110909e11c91251..0a79d32664ddcbcbf1a86d43938f87d76aaa98f5 100644
 --- a/proxy/wireguard/client.go
 +++ b/proxy/wireguard/client.go
 @@ -3,0 +4 @@ import (
-+	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
++	stdnet "net"
 @@ -12 +13 @@ import (
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
@@ -736,7 +736,7 @@ index c47e3c8b195d20f6906c17ed0110909e11c91251..bfdddf9f64da1d5907ea8611bf95d4f8
 +	h.mu.Lock()
 +	if h.closed {
 +		h.mu.Unlock()
-+		return gonet.ErrClosed
++		return stdnet.ErrClosed
 +	}
 +	err := h.dev.Up()
 +	h.mu.Unlock()
@@ -752,7 +752,7 @@ index c47e3c8b195d20f6906c17ed0110909e11c91251..bfdddf9f64da1d5907ea8611bf95d4f8
 -	if h.tun == nil {
 -		return errors.New("closed")
 +	if h.closed {
-+		return gonet.ErrClosed
++		return stdnet.ErrClosed
 @@ -290,2 +320 @@ func (h *Handler) init(ctx context.Context) error {
 -	// device.NewDevice may use the bind right away (Up -> BindUpdate -> Open),
 -	// so everything it reads must be set before creating the device.
