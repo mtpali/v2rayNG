@@ -10,7 +10,8 @@ class RootRuntimeGuardTest {
     private fun exercise(captureDevice: Boolean, ownerExists: Boolean, test: (File, Process, Process) -> Unit) {
         val dir = Files.createTempDirectory("v2ray-runtime-guard").toFile()
         val core = ProcessBuilder("sleep", "20").start()
-        val pid = core.pid().toInt()
+        // These shell tests run on the host JDK; Android's compile API has no Process.pid().
+        val pid = (Process::class.java.getMethod("pid").invoke(core) as Long).toInt()
         val start = File("/proc/$pid/stat").readText().substringAfterLast(") ").split(' ')[19]
         File(dir, "runtime.token").writeText("run-1")
         if (ownerExists) File(dir, "hotspot.owner").writeText("$pid $start")
@@ -19,7 +20,7 @@ class RootRuntimeGuardTest {
         val guardFile = File(dir, "guard.sh").apply { writeText(RootRuntimeGuard.script(pid, start, dir.absolutePath, "run-1", captureDevice)) }
         val syntax = ProcessBuilder("sh", "-n", guardFile.absolutePath).start()
         assertTrue(syntax.waitFor(2, TimeUnit.SECONDS)); assertEquals(0, syntax.exitValue())
-        val guard = ProcessBuilder("sh", guardFile.absolutePath).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        val guard = ProcessBuilder("sh", guardFile.absolutePath).redirectErrorStream(true).start()
         try { test(dir, core, guard) }
         finally { guard.destroyForcibly(); core.destroyForcibly(); guard.waitFor(); core.waitFor(); dir.deleteRecursively() }
     }

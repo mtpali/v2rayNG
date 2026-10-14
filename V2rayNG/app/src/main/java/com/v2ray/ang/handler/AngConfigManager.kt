@@ -257,12 +257,12 @@ object AngConfigManager {
 
             // Batch save all parsed configs (only one serverList read/write)
             if (configs.isNotEmpty()) {
-                if (!append) {
-                    MmkvManager.removeServerViaSubid(subid)
+                val selectedGuid = MmkvManager.getSelectServer()
+                val keyToProfile = batchSaveConfigs(configs, subid, append)
+                if (selectedGuid !in keyToProfile) {
+                    val matchKey = findMatchedProfileKey(keyToProfile, removedSelected)
+                    matchKey?.let { MmkvManager.setSelectServer(it) }
                 }
-                val keyToProfile = batchSaveConfigs(configs, subid)
-                val matchKey = findMatchedProfileKey(keyToProfile, removedSelected)
-                matchKey?.let { MmkvManager.setSelectServer(it) }
             }
 
             return configs.size
@@ -280,27 +280,8 @@ object AngConfigManager {
      * @param subid The subscription ID.
      * @return Map of generated keys to their corresponding ProfileItem.
      */
-    private fun batchSaveConfigs(configs: List<ProfileItem>, subid: String): Map<String, ProfileItem> {
-        val keyToProfile = mutableMapOf<String, ProfileItem>()
-
-        // Read serverList once
-        val serverList = MmkvManager.decodeServerList(subid)
-
-        configs.forEach { config ->
-            val key = Utils.getUuid()
-            // Save profile directly without updating serverList
-            MmkvManager.encodeProfileDirect(key, JsonUtil.toJson(config))
-
-            if (!serverList.contains(key)) {
-                serverList.add(0, key)
-            }
-            keyToProfile[key] = config
-        }
-
-        // Write serverList once
-        MmkvManager.encodeServerList(serverList, subid)
-        return keyToProfile
-    }
+    private fun batchSaveConfigs(configs: List<ProfileItem>, subid: String, append: Boolean): Map<String, ProfileItem> =
+        MmkvManager.saveSubscriptionProfiles(subid, configs.map { SubscriptionProfiles.Entry(it) }, append)
 
     /**
      * Finds a matched profile key from the given key-profile map using multi-level matching.
@@ -403,25 +384,19 @@ object AngConfigManager {
 
                 if (serverList.isNotEmpty()) {
                     val removedSelected = getRemovedSelectedProfile(subid, append)
-                    if (!append) {
-                        MmkvManager.removeServerViaSubid(subid)
-                    }
-                    var count = 0
-                    val keyToProfile = mutableMapOf<String, ProfileItem>()
-                    for (srv in serverList.reversed()) {
-                        val config = CustomFmt.parse(JsonUtil.toJson(srv)) ?: continue
+                    val selectedGuid = MmkvManager.getSelectServer()
+                    val entries = serverList.reversed().map { srv ->
+                        val config = CustomFmt.parse(JsonUtil.toJson(srv))
                         config.subscriptionId = subid
                         config.description = generateDescription(config)
-                        val key = MmkvManager.encodeServerConfig("", config)
-                        MmkvManager.encodeServerRaw(key, JsonUtil.toJsonPretty(srv) ?: "")
-                        keyToProfile[key] = config
-                        count += 1
+                        SubscriptionProfiles.Entry(config, JsonUtil.toJsonPretty(srv) ?: "")
                     }
-                    if (count > 0) {
+                    val keyToProfile = MmkvManager.saveSubscriptionProfiles(subid, entries, append)
+                    if (selectedGuid !in keyToProfile) {
                         val matchKey = findMatchedProfileKey(keyToProfile, removedSelected)
                         matchKey?.let { MmkvManager.setSelectServer(it) }
                     }
-                    return count
+                    return entries.size
                 }
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "Failed to parse custom config server JSON array", e)
@@ -432,11 +407,7 @@ object AngConfigManager {
                 val config = CustomFmt.parse(server) ?: return 0
                 config.subscriptionId = subid
                 config.description = generateDescription(config)
-                if (!append) {
-                    MmkvManager.removeServerViaSubid(subid)
-                }
-                val key = MmkvManager.encodeServerConfig("", config)
-                MmkvManager.encodeServerRaw(key, server)
+                MmkvManager.saveSubscriptionProfiles(subid, listOf(SubscriptionProfiles.Entry(config, server)), append)
                 return 1
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "Failed to parse custom config server as single config", e)
@@ -445,12 +416,9 @@ object AngConfigManager {
         } else if (WireguardFmt.isWireguardConf(server)) {
             try {
                 val config = WireguardFmt.parseWireguardConfFile(server) ?: return R.string.toast_incorrect_protocol
+                config.subscriptionId = subid
                 config.description = generateDescription(config)
-                if (!append) {
-                    MmkvManager.removeServerViaSubid(subid)
-                }
-                val key = MmkvManager.encodeServerConfig("", config)
-                MmkvManager.encodeServerRaw(key, server)
+                MmkvManager.saveSubscriptionProfiles(subid, listOf(SubscriptionProfiles.Entry(config, server)), append)
                 return 1
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "Failed to parse WireGuard config file", e)

@@ -212,6 +212,53 @@ object MmkvManager {
         profileFullStorage.encode(key, configJson)
     }
 
+    /** Refresh profiles as one reversible write; unchanged GUIDs retain traffic and test results. */
+    internal fun saveSubscriptionProfiles(
+        subscriptionId: String,
+        entries: List<SubscriptionProfiles.Entry>,
+        append: Boolean,
+    ): Map<String, ProfileItem> = withSubscriptionsLock {
+        val subId = getSubscriptionId(subscriptionId)
+        trafficStorage.lock()
+        try {
+            val originalIds = decodeServerList(subId)
+            val existing = if (append) emptyMap() else originalIds.mapNotNull { guid ->
+                decodeServerConfig(guid)?.let { guid to SubscriptionProfiles.Entry(it, decodeServerRaw(guid)) }
+            }.toMap()
+            val saved = SubscriptionProfiles.plan(existing, entries, Utils::getUuid)
+            val savedIds = saved.map { it.guid }
+            val removed = if (append) emptySet() else originalIds.toSet() - savedIds.toSet()
+            val changes = linkedMapOf<Pair<MMKV, String>, String?>()
+            saved.forEach { item ->
+                val json = if (item.reused) {
+                    com.google.gson.JsonParser.parseString(profileFullStorage.decodeString(item.guid)).asJsonObject.apply {
+                        addProperty("remarks", item.entry.profile.remarks)
+                        if (item.entry.profile.description == null) remove("description")
+                        else addProperty("description", item.entry.profile.description)
+                    }.toString()
+                } else JsonUtil.toJson(item.entry.profile)
+                changes[profileFullStorage to item.guid] = json
+                changes[serverRawStorage to item.guid] = item.entry.raw
+            }
+            removed.forEach { guid ->
+                changes[profileFullStorage to guid] = null
+                changes[serverRawStorage to guid] = null
+                changes[serverAffStorage to guid] = null
+            }
+            val traffic = readTraffic()
+            removed.forEach { traffic.profiles.remove(it) }
+            changes[trafficStorage to "snapshot"] = JsonUtil.toJson(traffic)
+            val finalIds = savedIds.asReversed() + if (append) originalIds else emptyList()
+            changes[mainStorage to "$KEY_SUB_SERVER_PREFIX$subId"] = JsonUtil.toJson(finalIds)
+            val selected = getSelectServer()
+            if (selected in removed || selected.isNullOrBlank()) {
+                changes[mainStorage to KEY_SELECTED_SERVER] = finalIds.firstOrNull()
+            }
+            writeSubscriptionChanges(changes)
+            saved.associate { it.guid to it.entry.profile }
+        } finally { trafficStorage.unlock() }
+    }
+
     /** Renames every existing profile in a group and restores earlier writes on failure. */
     @Synchronized
     fun renameServerProfiles(serverIds: List<String>, prefix: String): Int {
@@ -497,7 +544,10 @@ object MmkvManager {
             { (storage, key), value ->
                 if (value != null) storage.encode(key, value)
                 else { storage.removeValueForKey(key); !storage.containsKey(key) }
-            }, { LogUtil.e("MmkvManager", "Subscription rollback failed") })
+            }, { (_, key), error ->
+                val message = "Subscription rollback failed: record=$key"
+                if (error == null) LogUtil.e("MmkvManager", message) else LogUtil.e("MmkvManager", message, error)
+            })
     }
 
     fun renameSubscription(subId: String, name: String): Boolean = withSubscriptionsLock {
