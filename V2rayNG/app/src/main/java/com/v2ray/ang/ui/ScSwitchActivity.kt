@@ -19,10 +19,10 @@ class ScSwitchActivity : BaseActivity() {
             lifecycleScope.launch {
                 LauncherManager.startVServiceFromToggle(this@ScSwitchActivity)
                 LauncherManager.awaitStartDispatch()
-                finish()
+                finishToggle()
             }
         } else {
-            finish()
+            finishToggle()
         }
     }
 
@@ -43,8 +43,15 @@ class ScSwitchActivity : BaseActivity() {
                     requestVpnPermission.launch(permission)
                 }
             },
-            onComplete = { if (!permissionPending) finish() },
+            onComplete = { if (!permissionPending) finishToggle() },
         )
+    }
+
+    private fun finishToggle() {
+        if (isChangingConfigurations || isDestroyed || isFinishing) return
+        // Preserve launcher-widget behavior after consent/dispatch without surfacing the main task.
+        moveTaskToBack(true)
+        finish()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
