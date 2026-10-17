@@ -72,7 +72,7 @@ object LauncherManager {
     /** Serialize toggle queries so duplicate widget deliveries cannot invert a pending decision. */
     fun toggleVService(
         context: Context,
-        onStart: suspend () -> Unit = { startVServiceFromToggle(context) },
+        onStart: suspend () -> Unit = { startVServiceFromToggle(context); awaitStartDispatch() },
         onComplete: () -> Unit = {},
     ): Job? {
         toggleJob?.takeIf { it.isActive }?.let {
@@ -85,7 +85,11 @@ object LauncherManager {
                 val state = if (isStarting() || isStopping()) null else queryServiceState(app)
                 when (ServiceToggle.action(state, isStarting(), isStopping())) {
                     ServiceToggle.Action.START -> onStart()
-                    ServiceToggle.Action.STOP -> stopVService(app)
+                    ServiceToggle.Action.STOP -> {
+                        stopVService(app)
+                        // Keep the widget Activity/receiver alive through acknowledgement or watchdog expiry.
+                        stopJob?.join()
+                    }
                     ServiceToggle.Action.NONE -> Unit
                 }
             } catch (error: Exception) {
