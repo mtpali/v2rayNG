@@ -26,9 +26,11 @@ import kotlinx.coroutines.*
 /** UI-process launcher and stop watchdog; never loads or calls the native core. */
 object LauncherManager {
     private const val STOP_TIMEOUT_MS = 3_000L
+    private const val STATE_TIMEOUT_MS = 1_500L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var stopJob: Job? = null
     private var startJob: Job? = null
+    private var toggleJob: Job? = null
     private var listening = false
     private fun listen(context: Context) {
         if (listening) return
@@ -47,6 +49,54 @@ object LauncherManager {
     fun onStarted() { starting = false }
     fun isStopping(): Boolean = stopJob?.isActive == true
     fun onStopped() { stopJob?.cancel(); stopJob = null }
+
+    /** Query the daemon over IPC; a process/PID match is never a running-state acknowledgement. */
+    suspend fun queryServiceState(context: Context): Int? = withTimeoutOrNull(STATE_TIMEOUT_MS) {
+        MessageUtil.queryServiceState(context.applicationContext)
+    }
+
+    /** Keep a widget Activity visible until its foreground-service command has been dispatched. */
+    suspend fun awaitStartDispatch() { startJob?.join() }
+
+    /** Widget refreshes belong to the launcher scope, including while no Activity is open. */
+    fun queryServiceState(context: Context, onResult: (Int?) -> Unit): Job = scope.launch {
+        try {
+            onResult(queryServiceState(context))
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            LogUtil.e(AppConfig.TAG, "Toggle-state: daemon query failed", error)
+            onResult(null)
+        }
+    }
+
+    /** Serialize toggle queries so duplicate widget deliveries cannot invert a pending decision. */
+    fun toggleVService(
+        context: Context,
+        onStart: suspend () -> Unit = { startVServiceFromToggle(context) },
+        onComplete: () -> Unit = {},
+    ): Job? {
+        toggleJob?.takeIf { it.isActive }?.let {
+            onComplete()
+            return null
+        }
+        val app = context.applicationContext
+        return scope.launch {
+            try {
+                val state = if (isStarting() || isStopping()) null else queryServiceState(app)
+                when (ServiceToggle.action(state, isStarting(), isStopping())) {
+                    ServiceToggle.Action.START -> onStart()
+                    ServiceToggle.Action.STOP -> stopVService(app)
+                    ServiceToggle.Action.NONE -> Unit
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                LogUtil.e(AppConfig.TAG, "Toggle-control: daemon command failed", error)
+                app.toast(R.string.toast_failure)
+            } finally {
+                onComplete()
+            }
+        }.also { toggleJob = it }
+    }
 
     fun hasDaemon(context: Context): Boolean = ownedDaemon(context)?.pid == MmkvManager.decodeSettingsInt(AppConfig.PREF_CORE_PID, 0)
     private fun ownedDaemon(context: Context): ActivityManager.RunningAppProcessInfo? =
@@ -233,4 +283,17 @@ object LauncherManager {
         }
     }
 
+}
+
+/** Pure decisions for an acknowledged daemon reply, independently of Android process enumeration. */
+internal object ServiceToggle {
+    enum class Action { START, STOP, NONE }
+
+    fun action(reply: Int?, starting: Boolean, stopping: Boolean): Action = when {
+        stopping -> Action.NONE
+        starting -> Action.STOP
+        reply == 0 || reply == AppConfig.MSG_STATE_NOT_RUNNING -> Action.START
+        // An unresponsive daemon still needs the independent stop watchdog, never another start.
+        else -> Action.STOP
+    }
 }

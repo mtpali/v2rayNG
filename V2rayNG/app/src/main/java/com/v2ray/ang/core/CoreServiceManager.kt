@@ -450,10 +450,47 @@ object CoreServiceManager {
         }
     }
 
-    /**
-     * Broadcast receiver for handling messages sent to the service.
-     * Handles registration, service control, and screen events.
-     */
+    /** Reply off the main thread, with an independent deadline if a native query stalls. */
+    private fun replyServiceState(pending: BroadcastReceiver.PendingResult) {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val lock = Any()
+        var finished = false
+        lateinit var timeout: Runnable
+        fun finish(code: Int? = null) = synchronized(lock) {
+            if (!finished) {
+                finished = true
+                if (code != null) pending.resultCode = code
+                handler.removeCallbacks(timeout)
+                pending.finish()
+            }
+        }
+        // Unknown is distinct from the ordered broadcast's initial "no receiver" result (0).
+        pending.resultCode = -1
+        timeout = Runnable { finish() }
+        handler.postDelayed(timeout, 750L)
+        val job = runtimeScope?.launch {
+            try {
+                val code = when {
+                    stopGate.isStopping() -> AppConfig.MSG_STATE_STOPPING
+                    coreController.isRunning -> AppConfig.MSG_STATE_RUNNING
+                    currentConfig != null -> AppConfig.MSG_STATE_STARTING
+                    else -> AppConfig.MSG_STATE_NOT_RUNNING
+                }
+                finish(code)
+            } catch (error: Exception) {
+                LogUtil.e(AppConfig.TAG,
+                    "State-query: mode=${getService()?.javaClass?.simpleName} profile=${trafficGuid ?: "none"} read failed", error)
+            }
+        }
+        if (job == null) {
+            finish(if (stopGate.isStopping()) AppConfig.MSG_STATE_STOPPING else AppConfig.MSG_STATE_NOT_RUNNING)
+        } else {
+            // Finish even when stop cancels the owner before the coroutine starts.
+            job.invokeOnCompletion { finish() }
+        }
+    }
+
+    /** Broadcast receiver for registration, service control, and screen events. */
     private class ReceiveMessageHandler : BroadcastReceiver() {
         /**
          * Handles received broadcast messages.
@@ -464,6 +501,10 @@ object CoreServiceManager {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             val serviceControl = serviceControl?.get() ?: return
             when (intent?.getIntExtra("key", 0)) {
+                AppConfig.MSG_QUERY_STATE -> {
+                    if (isOrderedBroadcast) replyServiceState(goAsync())
+                }
+
                 AppConfig.MSG_REGISTER_CLIENT -> {
                     if (coreController.isRunning) {
                         MessageUtil.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_RUNNING, "")

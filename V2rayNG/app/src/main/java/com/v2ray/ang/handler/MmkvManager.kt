@@ -271,31 +271,13 @@ object MmkvManager {
             guid to profile
         }
         val renamed = ProfileBatchRenamer.plan(prefix, profiles)
-        val written = mutableListOf<String>()
-
-        try {
-            renamed.forEach { (guid, profile) ->
-                // Preserve unknown serialized fields from newer app versions during a rename.
-                val json = com.google.gson.JsonParser.parseString(originals.getValue(guid)).asJsonObject
-                json.addProperty("remarks", profile.remarks)
-                written += guid
-                check(profileFullStorage.encode(guid, json.toString())) {
-                    "Profile rename storage write failed"
-                }
-            }
-        } catch (error: Exception) {
-            val rollbackFailures = written.count { guid ->
-                profileFullStorage.encode(guid, originals.getValue(guid)).not()
-            }
-            if (rollbackFailures > 0) {
-                LogUtil.e(
-                    "MmkvManager",
-                    "Failed to roll back $rollbackFailures profile rename writes",
-                    error,
-                )
-            }
-            throw error
+        val changes = renamed.map { (guid, profile) ->
+            // Preserve unknown serialized fields from newer app versions during a rename.
+            val json = com.google.gson.JsonParser.parseString(originals.getValue(guid)).asJsonObject
+            json.addProperty("remarks", profile.remarks)
+            (profileFullStorage to guid) to json.toString()
         }
+        writeSubscriptionChanges(changes.toMap())
         return renamed.size
     }
 

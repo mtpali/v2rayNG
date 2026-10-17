@@ -1,14 +1,35 @@
 package com.v2ray.ang.util
 
 import android.content.ComponentName
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.dto.TestServiceMessage
 import com.v2ray.ang.service.CoreTestService
 import java.io.Serializable
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 object MessageUtil {
+
+    /** A final ordered result distinguishes an idle daemon from an absent control receiver. */
+    suspend fun queryServiceState(ctx: Context): Int = suspendCancellableCoroutine { continuation ->
+        val intent = Intent(AppConfig.BROADCAST_ACTION_SERVICE).apply {
+            `package` = AppConfig.ANG_PACKAGE
+            putExtra("key", AppConfig.MSG_QUERY_STATE)
+        }
+        try {
+            ctx.sendOrderedBroadcast(intent, null, object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    if (continuation.isActive) continuation.resume(resultCode)
+                }
+            }, null, 0, null, null)
+        } catch (error: Exception) {
+            if (continuation.isActive) continuation.resumeWithException(error)
+        }
+    }
 
 
     /**

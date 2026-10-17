@@ -12,7 +12,7 @@ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.google.android.material.tabs.TabLayout
 import com.v2ray.ang.R
 
-/** A two-second hold opens actions on release; dragging after the hold moves by GUID. */
+/** Uses Android's long-press timing for actions; a brief hold then drag moves by GUID. */
 class SubscriptionTabLayout @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : TabLayout(context, attrs) {
     var onSubscriptionActions: ((String) -> Unit)? = null
     var onSubscriptionMove: ((String, String) -> Unit)? = null
@@ -23,9 +23,10 @@ class SubscriptionTabLayout @JvmOverloads constructor(context: Context, attrs: A
     private var downY = 0f
     private var armed = false
     private var dragging = false
+    private var actionsShown = false
     private var edgeDirection = 0
 
-    /** TalkBack and keyboard expose the same operations without changing the two-second touch hold. */
+    /** TalkBack and keyboard expose the same operations as the touch long press. */
     fun bindActions(tab: Tab) {
         if ((tab.tag as? String).isNullOrBlank()) return
         ViewCompat.replaceAccessibilityAction(tab.view,
@@ -43,10 +44,16 @@ class SubscriptionTabLayout @JvmOverloads constructor(context: Context, attrs: A
         }
     }
     private val arm = Runnable {
-        if (source != null) {
-            armed = true
+        if (source != null) armed = true
+    }
+    private val showActions = Runnable {
+        val id = source
+        if (id != null && !dragging) {
+            armed = false
+            actionsShown = true
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             parent?.requestDisallowInterceptTouchEvent(true)
+            onSubscriptionActions?.invoke(id)
         }
     }
     private val scrollDrag = object : Runnable {
@@ -60,28 +67,36 @@ class SubscriptionTabLayout @JvmOverloads constructor(context: Context, attrs: A
     }
 
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+        if (actionsShown) {
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) resetGesture()
+            return true
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 resetGesture()
                 source = tabAt(event.rawX)?.tag as? String
                 if (source.isNullOrBlank()) source = null
                 downX = event.rawX; downY = event.rawY
-                if (source != null) postDelayed(arm, HOLD_MILLIS)
+                if (source != null) {
+                    postDelayed(arm, ViewConfiguration.getTapTimeout().toLong())
+                    postDelayed(showActions, ViewConfiguration.getLongPressTimeout().toLong())
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 val moved = kotlin.math.abs(event.rawX - downX) > slop || kotlin.math.abs(event.rawY - downY) > slop
                 if (armed && source != null && moved) {
                     dragging = true
+                    removeCallbacks(showActions)
+                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    parent?.requestDisallowInterceptTouchEvent(true)
                     updateTarget(event.rawX)
                     return true
                 }
                 if (moved && !armed) resetGesture()
             }
             MotionEvent.ACTION_UP -> {
-                if (armed && source != null) {
-                    val id = source!!
+                if (actionsShown) {
                     resetGesture()
-                    onSubscriptionActions?.invoke(id)
                     return true
                 }
                 resetGesture()
@@ -92,6 +107,10 @@ class SubscriptionTabLayout @JvmOverloads constructor(context: Context, attrs: A
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (actionsShown) {
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) resetGesture()
+            return true
+        }
         if (!dragging) return super.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
@@ -131,13 +150,11 @@ class SubscriptionTabLayout @JvmOverloads constructor(context: Context, attrs: A
     }
 
     private fun resetGesture() {
-        removeCallbacks(arm); removeCallbacks(scrollDrag)
+        removeCallbacks(arm); removeCallbacks(showActions); removeCallbacks(scrollDrag)
         (0 until tabCount).mapNotNull(::getTabAt).forEach { it.view.alpha = 1f }
-        source = null; target = null; armed = false; dragging = false; edgeDirection = 0
+        source = null; target = null; armed = false; dragging = false; actionsShown = false; edgeDirection = 0
         parent?.requestDisallowInterceptTouchEvent(false)
     }
 
     override fun onDetachedFromWindow() { resetGesture(); super.onDetachedFromWindow() }
-
-    companion object { const val HOLD_MILLIS = 2_000L }
 }

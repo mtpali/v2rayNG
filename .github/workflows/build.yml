@@ -117,6 +117,11 @@ jobs:
         run: |
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           chmod 755 gradlew
+          ./gradlew :app:testPlaystoreDebugUnitTest \
+            --tests com.v2ray.ang.core.ServiceToggleTest \
+            --tests com.v2ray.ang.handler.ProfileBatchRenamerTest \
+            --tests com.v2ray.ang.handler.SubscriptionMutationTest \
+            '-PABI_FILTERS=armeabi-v7a;arm64-v8a'
           ./gradlew :app:testPlaystoreDebugUnitTest :app:compilePlaystoreDebugKotlin \
             :app:assemblePlaystoreDebug :app:testFdroidDebugUnitTest \
             :app:compileFdroidDebugKotlin :app:assembleFdroidRelease \

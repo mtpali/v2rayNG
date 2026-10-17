@@ -624,10 +624,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             .setView(input)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val prefix = input.text?.toString().orEmpty().trim()
-                if (prefix.isEmpty()) {
-                    toastError(R.string.toast_profile_name_prefix_required)
-                    return@setPositiveButton
-                }
 
                 showLoading()
                 lifecycleScope.launch {
@@ -639,7 +635,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     } catch (cancelled: kotlinx.coroutines.CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
-                        LogUtil.e(AppConfig.TAG, "Failed to rename subscription profiles", error)
+                        LogUtil.e(AppConfig.TAG, "Failed to rename subscription profiles: group=$groupId", error)
                         toastError(R.string.toast_failure)
                     } finally {
                         hideLoading()

@@ -6,6 +6,11 @@
         <!-- Night mode specific overrides -->
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+        <item name="android:windowBackground">@color/md_theme_background</item>
+        <!-- Keep elevated Material surfaces black in OLED mode. -->
+        <item name="elevationOverlayEnabled">false</item>
+        <item name="colorSurfaceBright">@color/md_theme_surface</item>
+        <item name="colorSurfaceDim">@color/md_theme_surface</item>
     </style>
 
 </resources>

@@ -26,8 +26,21 @@ class ProfileBatchRenamerTest {
     }
 
     @Test
-    fun blankPrefixProducesNoWrites() {
-        assertTrue(ProfileBatchRenamer.plan("   ", listOf("id" to profile("Old"))).isEmpty())
+    fun emptyAndWhitespacePrefixesNumberProfilesWithoutLeadingSpaces() {
+        val source = listOf("first" to profile("Old A"), "second" to profile("Old B"))
+
+        listOf("", "   ", "\t\n").forEach { prefix ->
+            val result = ProfileBatchRenamer.plan(prefix, source)
+            assertEquals(listOf("first", "second"), result.keys.toList())
+            assertEquals(listOf("1", "2"), result.values.map { it.remarks })
+        }
+        assertEquals(listOf("Old A", "Old B"), source.map { it.second.remarks })
+    }
+
+    @Test
+    fun emptyGroupProducesNoWritesWithOrWithoutAPrefix() {
+        assertTrue(ProfileBatchRenamer.plan("", emptyList()).isEmpty())
+        assertTrue(ProfileBatchRenamer.plan("Name", emptyList()).isEmpty())
     }
 
     private fun profile(name: String) = ProfileItem.create(EConfigType.VMESS).apply {

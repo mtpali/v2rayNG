@@ -8,11 +8,11 @@ internal object ProfileBatchRenamer {
         profiles: List<Pair<String, ProfileItem>>,
     ): LinkedHashMap<String, ProfileItem> {
         val normalizedPrefix = prefix.trim()
-        if (normalizedPrefix.isEmpty()) return linkedMapOf()
 
         val result = linkedMapOf<String, ProfileItem>()
         profiles.forEachIndexed { index, (guid, profile) ->
-            result[guid] = profile.copy(remarks = "$normalizedPrefix ${index + 1}")
+            val number = (index + 1).toString()
+            result[guid] = profile.copy(remarks = if (normalizedPrefix.isEmpty()) number else "$normalizedPrefix $number")
         }
         return result
     }

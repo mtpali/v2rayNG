@@ -123,19 +123,16 @@
             android:name=".ui.ScSwitchActivity"
             android:excludeFromRecents="true"
             android:exported="false"
-            android:process=":RunSoLibV2RayDaemon"
             android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
         <activity
             android:name=".ui.ScStartActivity"
             android:excludeFromRecents="true"
             android:exported="false"
-            android:process=":RunSoLibV2RayDaemon"
             android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
         <activity
             android:name=".ui.ScStopActivity"
             android:excludeFromRecents="true"
             android:exported="false"
-            android:process=":RunSoLibV2RayDaemon"
             android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
 
         <activity
@@ -215,8 +212,7 @@
 
         <receiver
             android:name=".receiver.WidgetProvider"
-            android:exported="true"
-            android:process=":RunSoLibV2RayDaemon">
+            android:exported="true">
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/app_widget_provider" />
@@ -233,8 +229,7 @@
             android:foregroundServiceType="specialUse"
             android:icon="@drawable/ic_stat_name"
             android:label="@string/app_tile_name"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
-            android:process=":RunSoLibV2RayDaemon">
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>

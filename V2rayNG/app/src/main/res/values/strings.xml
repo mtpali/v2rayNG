@@ -470,7 +470,7 @@
     </string-array>
 
     <string name="title_rename_configs">Rename Configs</string>
-    <string name="hint_profile_name_prefix">Profile name prefix</string>
+    <string name="hint_profile_name_prefix">Name prefix (optional; leave blank for 1, 2, 3…)</string>
     <string name="toast_select_subscription_group">Select a subscription group first</string>
     <string name="toast_profile_name_prefix_required">Enter a profile name prefix</string>
     <string name="toast_profiles_renamed">Renamed %1$d profiles</string>
@@ -483,7 +483,8 @@
     <string name="subscription_show_link">Show link and QR code</string>
     <string name="subscription_no_link">This subscription has no link.</string>
     <string name="subscription_confirm_delete">Delete %1$s and all %2$d configurations?</string>
-    <string name="subscription_tab_hint">Hold for two seconds for actions, or hold and drag to reorder</string>
+    <string name="subscription_tab_hint">Long press for actions, or briefly hold and drag to reorder</string>
+    <string name="widget_toggle_vpn">Toggle VPN</string>
     <string name="subscription_move_left">Move left</string>
     <string name="subscription_move_right">Move right</string>
     <string name="subscription_copy_link">Copy link</string>
