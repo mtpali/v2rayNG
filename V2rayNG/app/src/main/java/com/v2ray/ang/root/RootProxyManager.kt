@@ -2,7 +2,6 @@ package com.v2ray.ang.root
 
 import android.content.Context
 import android.os.Process
-import android.util.AtomicFile
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
@@ -48,7 +47,7 @@ object RootProxyManager {
         "::1/128", "fe80::/10", "fc00::/7", "ff00::/8"
     )
 
-    fun start(context: Context): Boolean {
+    @Synchronized fun start(context: Context): Boolean {
         teardown(context)
         val script = buildTun2socksSetup(context) ?: return false
         val result = RootShell.runScript(context, "setup_rules.sh", script)
@@ -66,7 +65,7 @@ object RootProxyManager {
      * and forwards tethered clients into it, WITHOUT capturing the device's own traffic
      * (that keeps flowing through the VpnService). Requires root.
      */
-    fun startClientSharing(context: Context): Boolean {
+    @Synchronized fun startClientSharing(context: Context): Boolean {
         teardown(context)
         val script = buildTun2socksSetup(context, captureDeviceTraffic = false, forceLanShare = true)
             ?: return false
@@ -81,7 +80,7 @@ object RootProxyManager {
     }
 
     /** Remove all rules and stop helper processes. Safe to call repeatedly. */
-    fun stop(context: Context) {
+    @Synchronized fun stop(context: Context) {
         teardown(context)
         LogUtil.i(AppConfig.TAG, "RootProxyManager: rules removed")
     }
@@ -110,32 +109,22 @@ object RootProxyManager {
             return null
         }
         val appUid = context.applicationInfo.uid
-        val socksUsername = SettingsManager.getSocksUsername()
-        val socksPassword = SettingsManager.getSocksPassword()
         val port = SettingsManager.getSocksPort()
-        val runDir = File(context.filesDir, AppConfig.ROOT_RUNTIME_DIR)
-        if (!runDir.isDirectory && !runDir.mkdirs()) {
-            LogUtil.e(AppConfig.TAG, "RootProxyManager: failed to create runtime directory at ${runDir.absolutePath}")
-            return null
-        }
+        val runDir = File(context.filesDir, AppConfig.ROOT_RUNTIME_DIR).apply { mkdirs() }
         val pidFile = File(runDir, "tun2socks.pid").absolutePath
         val logFile = File(runDir, "tun2socks.log").absolutePath
-        val cfgFile = File(runDir, "tun2socks.yml")
+        val cfgFile = File(runDir, "tun2socks.yml").absolutePath
         val oomGuardPid = File(runDir, "oomguard.pid").absolutePath
         val ipv6 = MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED)
         val lanShare = forceLanShare || MmkvManager.decodeSettingsBool(AppConfig.PREF_ROOT_LAN_SHARING)
         val corePid = Process.myPid()
 
-        val config = buildHevConfig(socksUsername, socksPassword, port, ipv6)
-        if (!writeHevConfig(cfgFile, config)) {
-            return null
-        }
-        val cfgPath = cfgFile.absolutePath
-
         // Per-app proxy/bypass (mirrors what VpnService does via allowed/disallowed apps).
         val perAppEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY)
         val bypassApps = MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_APPS)
-        val selectedUids = if (perAppEnabled) {
+        // VPN Hotspot forwards tethered clients only. Its setup never uses app UIDs,
+        // so avoid a package-manager scan each time the helper starts.
+        val selectedUids = if (captureDeviceTraffic && perAppEnabled) {
             val pkgs = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_PER_APP_PROXY_SET)?.toList().orEmpty()
             if (pkgs.isNotEmpty()) PackageUidResolver.packageNamesToUids(context, pkgs) else emptyList()
         } else {
@@ -144,17 +133,31 @@ object RootProxyManager {
 
         return buildString {
             appendLine("set -e")
+            appendLine("echo \$$ \$(awk '{print \$22}' /proc/\$$/stat) > '${runDir.absolutePath}/setup.owner'")
             appendLine("BIN='${bin.absolutePath}'")
-            // Protect the core (this app process) from the Android low-memory killer.
-            // system_server keeps recomputing oom_score_adj for app processes, so a single
-            // write would be reverted — re-pin it from a small root loop instead.
-            appendLine("nohup sh -c 'while true; do echo ${AppConfig.ROOT_OOM_SCORE} > /proc/$corePid/oom_score_adj 2>/dev/null; sleep 5; done' >/dev/null 2>&1 &")
+            val token = java.util.UUID.randomUUID().toString()
+            val directory = runDir.absolutePath
+            File(runDir, "runtime.token").writeText(token)
+            // Guard cleanup must not kill its own shell, and is scoped to this runtime token.
+            File(runDir, "guard_cleanup.sh").writeText(buildTeardown(context, fromGuard = true))
+            val lanCleanup = File(runDir, "guard_lan_cleanup.sh")
+            if (lanShare) lanCleanup.writeText(buildLanTeardown()) else lanCleanup.delete()
+            File(runDir, "runtime_guard.sh").writeText(RootRuntimeGuard.script(
+                corePid, HotspotSession.startTime(corePid), directory, token, captureDeviceTraffic
+                ))
+            appendLine("nohup sh '$directory/runtime_guard.sh' >/dev/null 2>&1 &")
             appendLine("echo \$! > '$oomGuardPid'")
             // tun device node
             appendLine("if [ ! -e /dev/net/tun ]; then mkdir -p /dev/net; mknod /dev/net/tun c 10 200; chmod 666 /dev/net/tun; fi")
-            // The HEV config is written separately by the app process. Never place credentials
-            // in this root shell script, even when YAML quoting would otherwise be valid.
-            appendLine("nohup \"\$BIN\" '$cfgPath' >'$logFile' 2>&1 &")
+            // hev-socks5-tunnel config: it creates the tun ($TUN) itself and forwards it to the
+            // in-process core's SOCKS inbound on loopback. MTU comes from the existing VPN MTU
+            // setting. No fwmark on hev's sockets: its only upstream connection is to 127.0.0.1
+            // (loopback, already RETURNed by the 127.0.0.0/8 bypass) and the core's real outbound
+            // runs as the app uid (RETURNed by the uid-owner rule), so traffic can't loop.
+            appendLine("cat > '$cfgFile' <<'HEVCFG'")
+            append(buildHevConfig(port, ipv6))
+            appendLine("HEVCFG")
+            appendLine("nohup \"\$BIN\" '$cfgFile' >'$logFile' 2>&1 &")
             appendLine("T2S_PID=\$!")
             appendLine("echo \$T2S_PID > '$pidFile'")
             appendLine("echo ${AppConfig.ROOT_OOM_SCORE} > /proc/\$T2S_PID/oom_score_adj 2>/dev/null || true")
@@ -192,6 +195,7 @@ object RootProxyManager {
                     append(buildV6Blackhole(appUid, perAppEnabled, bypassApps, selectedUids))
                 }
             }
+            appendLine("rm -f '${runDir.absolutePath}/setup.owner'")
         }
     }
 
@@ -202,7 +206,7 @@ object RootProxyManager {
      * tun address when IPv6 is enabled; whether v6 actually flows in is decided separately by
      * the v6 route into [TABLE].
      */
-    private fun buildHevConfig(socksUsername: String?, socksPassword: String?, socksPort: Int, ipv6: Boolean): String {
+    private fun buildHevConfig(socksPort: Int, ipv6: Boolean): String {
         val v4 = AppConfig.ROOT_TUN_ADDR_V4.substringBefore("/")
         val v6 = AppConfig.ROOT_TUN_ADDR_V6.substringBefore("/")
         return buildString {
@@ -216,31 +220,7 @@ object RootProxyManager {
             appendLine("  port: $socksPort")
             appendLine("  address: '${AppConfig.LOOPBACK}'")
             appendLine("  udp: 'udp'")
-            if (socksUsername != null && socksPassword != null) {
-                appendLine("  username: ${socksUsername.toSingleQuotedYamlScalar()}")
-                appendLine("  password: ${socksPassword.toSingleQuotedYamlScalar()}")
-            }
             appendLine("  tcp-fastopen: true")
-        }
-    }
-
-    private fun writeHevConfig(file: File, config: String): Boolean {
-        val atomicFile = AtomicFile(file)
-        val output = try {
-            atomicFile.startWrite()
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "RootProxyManager: failed to open HEV config at ${file.absolutePath}", e)
-            return false
-        }
-
-        return try {
-            output.write(config.toByteArray(Charsets.UTF_8))
-            atomicFile.finishWrite(output)
-            true
-        } catch (e: Exception) {
-            atomicFile.failWrite(output)
-            LogUtil.e(AppConfig.TAG, "RootProxyManager: failed to write HEV config at ${file.absolutePath}", e)
-            false
         }
     }
 
@@ -446,9 +426,30 @@ object RootProxyManager {
         }
     }
 
+    private fun buildLanTeardown(): String = buildString {
+            // LAN / tethering sharing (always cleaned, harmless if it was never set up)
+            appendLine("iptables -D FORWARD -j ${AppConfig.ROOT_FWD_CHAIN} 2>/dev/null || true")
+            appendLine("iptables -F ${AppConfig.ROOT_FWD_CHAIN} 2>/dev/null || true")
+            appendLine("iptables -X ${AppConfig.ROOT_FWD_CHAIN} 2>/dev/null || true")
+            appendLine("iptables -t mangle -D FORWARD -o $TUN -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1350 2>/dev/null || true")
+            appendLine("iptables -t nat -D PREROUTING -j ${AppConfig.ROOT_DNS_CHAIN} 2>/dev/null || true")
+            appendLine("iptables -t nat -F ${AppConfig.ROOT_DNS_CHAIN} 2>/dev/null || true")
+            appendLine("iptables -t nat -X ${AppConfig.ROOT_DNS_CHAIN} 2>/dev/null || true")
+            // IPv6 LAN-sharing chains (forward accept/reject + forwarded-client marking)
+            appendLine("ip6tables -D FORWARD -j ${AppConfig.ROOT_V6_FWD_CHAIN} 2>/dev/null || true")
+            appendLine("ip6tables -F ${AppConfig.ROOT_V6_FWD_CHAIN} 2>/dev/null || true")
+            appendLine("ip6tables -X ${AppConfig.ROOT_V6_FWD_CHAIN} 2>/dev/null || true")
+            appendLine("ip6tables -t mangle -D PREROUTING -j ${AppConfig.ROOT_V6_PRE_CHAIN} 2>/dev/null || true")
+            appendLine("ip6tables -t mangle -F ${AppConfig.ROOT_V6_PRE_CHAIN} 2>/dev/null || true")
+            appendLine("ip6tables -t mangle -X ${AppConfig.ROOT_V6_PRE_CHAIN} 2>/dev/null || true")
+            for (pref in listOf(5000, 5010, 5020, 5025, 5026, 5027, 5030, 5040, 5050, 6000)) {
+                appendLine("ip rule del pref $pref 2>/dev/null || true")
+            }
+    }
+
     // ---------------------------------------------------------------- teardown
 
-    private fun buildTeardown(context: Context): String {
+    private fun buildTeardown(context: Context, fromGuard: Boolean = false): String {
         val runDir = File(context.filesDir, AppConfig.ROOT_RUNTIME_DIR)
         val pidFile = File(runDir, "tun2socks.pid").absolutePath
         val oomGuardPid = File(runDir, "oomguard.pid").absolutePath
@@ -469,34 +470,18 @@ object RootProxyManager {
             appendLine("ip -6 rule del fwmark $MARK table $TABLE priority $PRIORITY 2>/dev/null || true")
             appendLine("ip route flush table $TABLE 2>/dev/null || true")
             appendLine("ip -6 route flush table $TABLE 2>/dev/null || true")
-            // LAN / tethering sharing (always cleaned, harmless if it was never set up)
-            appendLine("iptables -D FORWARD -j ${AppConfig.ROOT_FWD_CHAIN} 2>/dev/null || true")
-            appendLine("iptables -F ${AppConfig.ROOT_FWD_CHAIN} 2>/dev/null || true")
-            appendLine("iptables -X ${AppConfig.ROOT_FWD_CHAIN} 2>/dev/null || true")
-            appendLine("iptables -t mangle -D FORWARD -o $TUN -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1350 2>/dev/null || true")
-            appendLine("iptables -t nat -D PREROUTING -j ${AppConfig.ROOT_DNS_CHAIN} 2>/dev/null || true")
-            appendLine("iptables -t nat -F ${AppConfig.ROOT_DNS_CHAIN} 2>/dev/null || true")
-            appendLine("iptables -t nat -X ${AppConfig.ROOT_DNS_CHAIN} 2>/dev/null || true")
-            // IPv6 LAN-sharing chains (forward accept/reject + forwarded-client marking)
-            appendLine("ip6tables -D FORWARD -j ${AppConfig.ROOT_V6_FWD_CHAIN} 2>/dev/null || true")
-            appendLine("ip6tables -F ${AppConfig.ROOT_V6_FWD_CHAIN} 2>/dev/null || true")
-            appendLine("ip6tables -X ${AppConfig.ROOT_V6_FWD_CHAIN} 2>/dev/null || true")
-            appendLine("ip6tables -t mangle -D PREROUTING -j ${AppConfig.ROOT_V6_PRE_CHAIN} 2>/dev/null || true")
-            appendLine("ip6tables -t mangle -F ${AppConfig.ROOT_V6_PRE_CHAIN} 2>/dev/null || true")
-            appendLine("ip6tables -t mangle -X ${AppConfig.ROOT_V6_PRE_CHAIN} 2>/dev/null || true")
-            for (pref in listOf(5000, 5010, 5020, 5025, 5026, 5027, 5030, 5040, 5050, 6000)) {
-                appendLine("ip rule del pref $pref 2>/dev/null || true")
-            }
+            append(buildLanTeardown())
             // tun device down + helper process
             appendLine("ip link set dev $TUN down 2>/dev/null || true")
             appendLine("[ -f '$pidFile' ] && kill \$(cat '$pidFile') 2>/dev/null || true")
             appendLine("rm -f '$pidFile'")
-            // stop the OOM re-pin loop and restore the core process's LMK priority
-            appendLine("[ -f '$oomGuardPid' ] && kill \$(cat '$oomGuardPid') 2>/dev/null || true")
-            appendLine("rm -f '$oomGuardPid'")
-            appendLine("echo 0 > /proc/$corePid/oom_score_adj 2>/dev/null || true")
+            appendLine("rm -f '${runDir.absolutePath}/runtime.token' '${runDir.absolutePath}/guard_lan_cleanup.sh'")
+            if (!fromGuard) {
+                appendLine("[ -f '$oomGuardPid' ] && kill \$(cat '$oomGuardPid') 2>/dev/null || true")
+                appendLine("rm -f '$oomGuardPid'")
+                appendLine("echo 0 > /proc/$corePid/oom_score_adj 2>/dev/null || true")
+            }
+
         }
     }
 }
-
-internal fun String.toSingleQuotedYamlScalar(): String = "'${replace("'", "''")}'"

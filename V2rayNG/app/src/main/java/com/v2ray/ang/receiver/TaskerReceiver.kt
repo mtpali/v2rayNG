@@ -28,12 +28,12 @@ class TaskerReceiver : BroadcastReceiver() {
                 return
             } else if (switch) {
                 if (guid == AppConfig.TASKER_DEFAULT_GUID) {
-                    LauncherManager.startServiceFromToggle(context)
+                    LauncherManager.startVServiceFromToggle(context)
                 } else {
-                    LauncherManager.startService(context, guid)
+                    LauncherManager.startVService(context, guid)
                 }
             } else {
-                LauncherManager.stopService(context)
+                LauncherManager.stopVService(context)
             }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Error processing Tasker broadcast", e)

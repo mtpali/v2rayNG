@@ -15,7 +15,7 @@ enum class NotificationChannelType(
         notificationId = 13
     ),
     CORE_TEST(
-        channelId = "core_test_channel",
+        channelId = "core_test_silent_v2",
         channelName = "Core Test Service",
         notificationId = 12
     )

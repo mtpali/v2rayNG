@@ -36,7 +36,6 @@ data class ProfileItem(
     var xhttpMode: String? = null,
     var xhttpExtra: String? = null,
     var finalMask: String? = null,
-
     var security: String? = null,
     var sni: String? = null,
     var alpn: String? = null,
@@ -56,11 +55,41 @@ data class ProfileItem(
     var localAddress: String? = null,
     var reserved: String? = null,
     var mtu: Int? = null,
+    var allowedIPs: String? = null,
+    var keepAlive: Int? = null,
+    var awgKeepAliveRange: String? = null,
+    var awgDns: String? = null,
+
+    var isAmneziaWG: Boolean = false,
+    var awgJc: Int = 0,
+    var awgJmin: Int = 0,
+    var awgJmax: Int = 0,
+    var awgS1: Int = 0,
+    var awgS2: Int = 0,
+    var awgS3: Int = 0,
+    var awgS4: Int = 0,
+    var awgH1: String? = null,
+    var awgH2: String? = null,
+    var awgH3: String? = null,
+    var awgH4: String? = null,
+    var awgI1: String? = null,
+    var awgI2: String? = null,
+    var awgI3: String? = null,
+    var awgI4: String? = null,
+    var awgI5: String? = null,
+    var awgHeaderProtectionKey: String? = null,
+    var awgContentPaddingAddition: String? = null,
+    var awgRekeyAfterTime: String? = null,
+    var awgRekeyTimeout: String? = null,
+    var awgRejectAfterTime: String? = null,
+    var awgKeepaliveTimeout: String? = null,
+    var awgMaxHandshakeAttempts: String? = null,
+    var awgRandomizePacketTrailers: Boolean = false,
+    var awgDisableCookieReplies: Boolean = false,
 
     var obfsPassword: String? = null,
     var portHopping: String? = null,
     var portHoppingInterval: String? = null,
-    @Deprecated("Use pinnedCA256")
     var pinSHA256: String? = null,
     var bandwidthDown: String? = null,
     var bandwidthUp: String? = null,
@@ -68,45 +97,96 @@ data class ProfileItem(
     var policyGroupType: String? = null,
     var policyGroupSubscriptionId: String? = null,
     var policyGroupFilter: String? = null,
-    var policyGroupTestOutbounds: Boolean? = null,
-    var policyGroupFallbackTag: String? = null,
     var proxyChainProfiles: String? = null,
 
     var browserDialerMode: String? = null,
-) {
 
+    ) {
     companion object {
-        fun create(configType: EConfigType): ProfileItem =
-            ProfileItem(configType = configType)
+        fun create(configType: EConfigType): ProfileItem {
+            return ProfileItem(configType = configType)
+        }
     }
 
     fun getServerAddressAndPort(): String {
         if (server.isNullOrEmpty() && configType == EConfigType.CUSTOM) {
             return "${AppConfig.LOOPBACK}:${AppConfig.PORT_SOCKS}"
         }
-        return "${Utils.getIpv6Address(server)}:$serverPort"
+        return Utils.getIpv6Address(server) + ":" + serverPort
     }
 
-    /**
-     * Dedicated identity for "remove duplicate configurations".
-     *
-     * Ignores metadata that does not affect connection:
-     * - configVersion
-     * - subscriptionId
-     * - addedTime
-     * - remarks
-     * - description
-     *
-     * All other fields, including configType, are included in the comparison.
-     *
-     * Returns a copy; the caller must not modify it further.
-     */
-    fun duplicateIdentity(): ProfileItem =
-        copy(
-            configVersion = 0,
-            subscriptionId = "",
-            addedTime = 0L,
-            remarks = "",
-            description = null
-        )
+    override fun equals(other: Any?): Boolean {
+        if (other == null) return false
+        val obj = other as ProfileItem
+
+        return (this.server == obj.server
+                && this.serverPort == obj.serverPort
+                && this.password == obj.password
+                && this.method == obj.method
+                && this.flow == obj.flow
+                && this.username == obj.username
+
+                && this.network == obj.network
+                && this.headerType == obj.headerType
+                && this.host == obj.host
+                && this.path == obj.path
+                && this.seed == obj.seed
+                && this.kcpMtu == obj.kcpMtu
+                && this.kcpTti == obj.kcpTti
+                && this.quicSecurity == obj.quicSecurity
+                && this.quicKey == obj.quicKey
+                && this.mode == obj.mode
+                && this.serviceName == obj.serviceName
+                && this.authority == obj.authority
+                && this.xhttpMode == obj.xhttpMode
+
+                && this.security == obj.security
+                && this.sni == obj.sni
+                && this.alpn == obj.alpn
+                && this.fingerPrint == obj.fingerPrint
+                && this.publicKey == obj.publicKey
+                && this.shortId == obj.shortId
+
+                && this.secretKey == obj.secretKey
+                && this.localAddress == obj.localAddress
+                && this.reserved == obj.reserved
+                && this.mtu == obj.mtu
+                && this.allowedIPs == obj.allowedIPs
+                && this.keepAlive == obj.keepAlive
+                && this.awgKeepAliveRange == obj.awgKeepAliveRange
+                && this.awgDns == obj.awgDns
+                && this.isAmneziaWG == obj.isAmneziaWG
+                && this.awgJc == obj.awgJc
+                && this.awgJmin == obj.awgJmin
+                && this.awgJmax == obj.awgJmax
+                && this.awgS1 == obj.awgS1
+                && this.awgS2 == obj.awgS2
+                && this.awgS3 == obj.awgS3
+                && this.awgS4 == obj.awgS4
+                && this.awgH1 == obj.awgH1
+                && this.awgH2 == obj.awgH2
+                && this.awgH3 == obj.awgH3
+                && this.awgH4 == obj.awgH4
+                && this.awgI1 == obj.awgI1
+                && this.awgI2 == obj.awgI2
+                && this.awgI3 == obj.awgI3
+                && this.awgI4 == obj.awgI4
+                && this.awgI5 == obj.awgI5
+                && this.awgHeaderProtectionKey == obj.awgHeaderProtectionKey
+                && this.awgContentPaddingAddition == obj.awgContentPaddingAddition
+                && this.awgRekeyAfterTime == obj.awgRekeyAfterTime
+                && this.awgRekeyTimeout == obj.awgRekeyTimeout
+                && this.awgRejectAfterTime == obj.awgRejectAfterTime
+                && this.awgKeepaliveTimeout == obj.awgKeepaliveTimeout
+                && this.awgMaxHandshakeAttempts == obj.awgMaxHandshakeAttempts
+                && this.awgRandomizePacketTrailers == obj.awgRandomizePacketTrailers
+                && this.awgDisableCookieReplies == obj.awgDisableCookieReplies
+
+                && this.obfsPassword == obj.obfsPassword
+                && this.portHopping == obj.portHopping
+                && this.portHoppingInterval == obj.portHoppingInterval
+                && this.pinnedCA256 == obj.pinnedCA256
+                && this.proxyChainProfiles == obj.proxyChainProfiles
+                )
+    }
 }

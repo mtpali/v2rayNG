@@ -4,9 +4,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration.UI_MODE_NIGHT_MASK
+import android.content.res.Configuration.UI_MODE_NIGHT_NO
 import android.os.Build
 import android.os.LocaleList
 import android.provider.Settings
+import android.text.Editable
 import android.util.Base64
 import android.util.Patterns
 import android.webkit.URLUtil
@@ -30,6 +33,27 @@ object Utils {
     private val IPV4_REGEX =
         Regex("^([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])\\.([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])\\.([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])\\.([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])$")
     private val IPV6_REGEX = Regex("^((?:[0-9A-Fa-f]{1,4}))?((?::[0-9A-Fa-f]{1,4}))*::((?:[0-9A-Fa-f]{1,4}))?((?::[0-9A-Fa-f]{1,4}))*|((?:[0-9A-Fa-f]{1,4}))((?::[0-9A-Fa-f]{1,4})){7}$")
+
+    /**
+     * Convert string to editable for Kotlin.
+     *
+     * @param text The string to convert.
+     * @return An Editable instance containing the text.
+     */
+    fun getEditable(text: String?): Editable {
+        return Editable.Factory.getInstance().newEditable(text.orEmpty())
+    }
+
+    /**
+     * Find the position of a value in an array.
+     *
+     * @param array The array to search.
+     * @param value The value to find.
+     * @return The index of the value in the array, or -1 if not found.
+     */
+    fun arrayFind(array: Array<out String>, value: String): Int {
+        return array.indexOf(value)
+    }
 
     /**
      * Parse a string to an integer with a default value.
@@ -90,7 +114,7 @@ object Utils {
      * @param text The base64 encoded string.
      * @return The decoded string, or null if decoding fails.
      */
-    private fun tryDecodeBase64(text: String?): String? {
+    fun tryDecodeBase64(text: String?): String? {
         if (text.isNullOrEmpty()) return null
 
         try {
@@ -145,6 +169,20 @@ object Utils {
                 if (arr.size == 2 && arr[1].toIntOrNull() != null && arr[1].toInt() > -1) {
                     addr = arr[0]
                 }
+            }
+
+            // Bracketed IPv6 endpoints may include a port, while isPureIpAddress
+            // must continue to reject endpoint strings.
+            if (addr.startsWith("[")) {
+                val closingBracket = addr.indexOf(']')
+                if (closingBracket <= 1) return false
+                val suffix = addr.substring(closingBracket + 1)
+                if (suffix.isNotEmpty()) {
+                    if (!suffix.startsWith(":")) return false
+                    val port = suffix.drop(1).toIntOrNull() ?: return false
+                    if (port !in 0..65535) return false
+                }
+                addr = addr.substring(1, closingBracket)
             }
 
             // Handle IPv4-mapped IPv6 addresses
@@ -212,10 +250,8 @@ object Utils {
      */
     private fun isIpv6Address(value: String): Boolean {
         var addr = value
-        if (addr.startsWith("[")) {
-            val closingBracket = addr.lastIndexOf(']')
-            if (closingBracket <= 1) return false
-            addr = addr.substring(1, closingBracket)
+        if (addr.startsWith("[") && addr.endsWith("]")) {
+            addr = addr.drop(1).dropLast(1)
         }
         return IPV6_REGEX.matches(addr)
     }
@@ -278,6 +314,36 @@ object Utils {
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to generate UUID", e)
             ""
+        }
+    }
+
+    /**
+     * Decode a URL-encoded string.
+     *
+     * @param url The URL-encoded string.
+     * @return The decoded string, or the original string if decoding fails.
+     */
+    fun urlDecode(url: String): String {
+        return try {
+            URLDecoder.decode(url, Charsets.UTF_8.toString())
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to decode URL", e)
+            url
+        }
+    }
+
+    /**
+     * Encode a string to URL-encoded format.
+     *
+     * @param url The string to encode.
+     * @return The URL-encoded string, or the original string if encoding fails.
+     */
+    fun urlEncode(url: String): String {
+        return try {
+            URLEncoder.encode(url, Charsets.UTF_8.toString())
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to encode URL", e)
+            url
         }
     }
 
@@ -348,7 +414,8 @@ object Utils {
         if (context == null) return ""
 
         return try {
-            context.getDir(AppConfig.DIR_ASSETS, Context.MODE_PRIVATE).absolutePath
+            context.getExternalFilesDir(AppConfig.DIR_ASSETS)?.absolutePath
+                ?: context.getDir(AppConfig.DIR_ASSETS, 0).absolutePath
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to get user asset path", e)
             ""
@@ -368,6 +435,16 @@ object Utils {
             LogUtil.e(AppConfig.TAG, "Failed to generate device ID", e)
             ""
         }
+    }
+
+    /**
+     * Get the dark mode status.
+     *
+     * @param context The context to use.
+     * @return True if dark mode is enabled, false otherwise.
+     */
+    fun getDarkModeStatus(context: Context): Boolean {
+        return context.resources.configuration.uiMode and UI_MODE_NIGHT_MASK != UI_MODE_NIGHT_NO
     }
 
     /**
@@ -402,6 +479,26 @@ object Utils {
     fun fixIllegalUrl(str: String): String {
         return str.replace(" ", "%20")
             .replace("|", "%7C")
+    }
+
+    /**
+     * Find a free port from a list of ports.
+     *
+     * @param ports The list of ports to check.
+     * @return The first free port found.
+     * @throws IOException If no free port is found.
+     */
+    fun findFreePort(ports: List<Int>): Int {
+        for (port in ports) {
+            try {
+                return ServerSocket(port).use { it.localPort }
+            } catch (ex: IOException) {
+                continue  // try next port
+            }
+        }
+
+        // if the program gets here, no port in the range was found
+        throw IOException("no free port found")
     }
 
     /**
@@ -459,6 +556,13 @@ object Utils {
      * @return True if the package is Xray, false otherwise.
      */
     fun isXray(): Boolean = BuildConfig.APPLICATION_ID.startsWith("com.v2ray.ang")
+
+    /**
+     * Check if it is the Google Play version.
+     *
+     * @return True if the package is Google Play, false otherwise.
+     */
+    fun isGoogleFlavor(): Boolean = BuildConfig.FLAVOR == "playstore"
 
     /**
      * Check if an IPv4 address is within an IPv4 CIDR range
